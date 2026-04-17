@@ -26,6 +26,8 @@ import {
   resolveElementCoordinates,
   scaleCoordinatesFromScreenshot,
   getPageMetadata,
+  setApprovedOrigin,
+  consumeBlockedNavigations,
 } from "./cdp.js";
 import {
   buildSystemPrompt,
@@ -56,6 +58,19 @@ const UPLOAD_FIXTURES = {
   "data.csv": { type: "text/csv" },
   "text.txt": { type: "text/plain" },
 };
+
+/**
+ * Parses the origin (scheme + host + port) from a URL string.
+ * @param {string} url
+ * @returns {string|null}
+ */
+function getOrigin(url) {
+  try {
+    return new URL(url).origin;
+  } catch (err) {
+    return null;
+  }
+}
 
 // Machado-style color-blindness matrices (20 values for SVG feColorMatrix type="matrix")
 const COLOR_BLINDNESS_MATRICES = {
@@ -281,11 +296,20 @@ export default class AgentService {
     this.systemPrompt = buildSystemPrompt(persona, productContext);
     this.loopDetector = new ActionLoopDetector();
     this.abortController = new AbortController();
+    this.approvedOrigin = null;
 
     try {
       await attachDebugger(tabId);
+      try {
+        const startMeta = await getPageMetadata(tabId);
+        this.approvedOrigin = getOrigin(startMeta.url);
+      } catch (err) {
+        this.approvedOrigin = null;
+      }
+      setApprovedOrigin(this.approvedOrigin);
       await this._runLoop(onStepCallback);
     } finally {
+      setApprovedOrigin(null);
       await detachDebugger(tabId);
       this.isRunning = false;
     }
@@ -321,6 +345,29 @@ export default class AgentService {
       } catch (err) {
         throw new Error(`Failed to capture page state: ${err.message}`);
       }
+
+      const blocked = consumeBlockedNavigations();
+      if (blocked.length > 0) {
+        const targets = blocked.map(function (b) { return b.origin; }).join(", ");
+        const blockedStep = {
+          stepNumber,
+          action: { type: "blocked" },
+          reasoning: `The last action tried to navigate off the starting site to ${targets}. The request was cancelled before it loaded — the tab stayed on the starting site. I'll try a different approach that keeps the test on the starting site.`,
+          observation: "",
+          sentiment: "neutral",
+          screenshot: pageState.screenshot,
+          cleanScreenshot: pageState.cleanScreenshot,
+          gesture: null,
+          url: pageState.metadata.url,
+          success: false,
+          error: `Cross-origin navigation blocked: ${targets}`,
+        };
+        this.sessionHistory.push(blockedStep);
+        if (onStepCallback) onStepCallback(blockedStep);
+        continue;
+      }
+
+      if (!this.isRunning) break;
 
       const pageFingerprint = `${pageState.metadata.url}|${pageState.elementCount}`;
       const nudge = this.loopDetector.getNudge();
@@ -409,6 +456,11 @@ export default class AgentService {
       const urlBefore = pageState.metadata.url;
 
       for (let i = 0; i < Math.min(actions.length, MAX_ACTIONS_PER_STEP); i++) {
+        if (!this.isRunning) {
+          shouldBreak = true;
+          break;
+        }
+
         const action = actions[i];
         lastAction = action;
 
@@ -428,8 +480,12 @@ export default class AgentService {
         try {
           console.log("[Agent] Executing action:", JSON.stringify(action));
           await this._executeAction(action);
+          if (!this.isRunning) {
+            shouldBreak = true;
+            break;
+          }
           if (action.type !== "wait") {
-            await waitForPageSettle(this.tabId);
+            await waitForPageSettle(this.tabId, this.abortController?.signal);
           }
         } catch (err) {
           console.error("[Agent] Action failed:", action.type, err.message);
@@ -658,7 +714,7 @@ export default class AgentService {
         break;
 
       case "wait":
-        await waitForPageSettle(this.tabId);
+        await waitForPageSettle(this.tabId, this.abortController?.signal);
         break;
 
       case "done":

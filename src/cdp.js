@@ -15,6 +15,10 @@ let offscreenCounts = { above: 0, below: 0 };
 let pendingRequests = 0;
 let networkEnabled = false;
 
+let mainFrameId = null;
+let approvedOrigin = null;
+let blockedNavigations = [];
+
 /**
  * Returns the current interactive element map.
  * @returns {Object} Map of element index to element data with bounding boxes.
@@ -54,6 +58,17 @@ export async function attachDebugger(tabId) {
   networkEnabled = true;
   pendingRequests = 0;
 
+  try {
+    const tree = await sendCommand(tabId, "Page.getFrameTree");
+    mainFrameId = tree.frameTree?.frame?.id || null;
+  } catch (err) {
+    mainFrameId = null;
+  }
+
+  await sendCommand(tabId, "Fetch.enable", {
+    patterns: [{ resourceType: "Document", requestStage: "Request" }],
+  });
+
   chrome.debugger.onEvent.addListener(handleDebuggerEvent);
 }
 
@@ -66,6 +81,9 @@ export async function detachDebugger(tabId) {
   chrome.debugger.onEvent.removeListener(handleDebuggerEvent);
   networkEnabled = false;
   pendingRequests = 0;
+  mainFrameId = null;
+  approvedOrigin = null;
+  blockedNavigations = [];
   try {
     await ChromeUtils.debuggerDetach({ tabId });
   } catch (err) {
@@ -73,16 +91,76 @@ export async function detachDebugger(tabId) {
 }
 
 /**
- * Tracks in-flight network requests for page settle detection.
+ * Sets the origin that the agent is allowed to operate on. Cross-origin top-frame
+ * navigations are cancelled at the network layer via Fetch.failRequest.
+ * @param {string|null} origin
+ */
+export function setApprovedOrigin(origin) {
+  approvedOrigin = origin || null;
+}
+
+/**
+ * Returns and clears the list of top-frame navigations that have been blocked
+ * since the last call.
+ * @returns {Array<{url: string, origin: string}>}
+ */
+export function consumeBlockedNavigations() {
+  const blocked = blockedNavigations;
+  blockedNavigations = [];
+  return blocked;
+}
+
+/**
+ * Tracks in-flight network requests for page settle detection and intercepts
+ * top-frame document navigations to enforce the origin lock.
  * @param {Object} source - The debugger event source.
  * @param {string} method - The CDP event method name.
+ * @param {Object} [params] - The CDP event parameters.
  */
-function handleDebuggerEvent(source, method) {
+function handleDebuggerEvent(source, method, params) {
   if (method === "Network.requestWillBeSent") {
     pendingRequests++;
   } else if (method === "Network.loadingFinished" || method === "Network.loadingFailed") {
     pendingRequests = Math.max(0, pendingRequests - 1);
+  } else if (method === "Fetch.requestPaused") {
+    handleFetchPaused(source.tabId, params);
   }
+}
+
+/**
+ * Handles a paused top-frame document request. Allows same-origin navigations
+ * (and all subframe requests) through; cancels cross-origin top-frame navigations.
+ * @param {number} tabId
+ * @param {Object} params - The Fetch.requestPaused event parameters.
+ */
+function handleFetchPaused(tabId, params) {
+  const requestId = params.requestId;
+  const url = params.request?.url || "";
+  const frameId = params.frameId;
+
+  const isMainFrame = mainFrameId && frameId === mainFrameId;
+
+  if (!isMainFrame || !approvedOrigin) {
+    sendCommand(tabId, "Fetch.continueRequest", { requestId }).catch(function () {});
+    return;
+  }
+
+  let targetOrigin = null;
+  try {
+    targetOrigin = new URL(url).origin;
+  } catch (err) {
+  }
+
+  if (!targetOrigin || targetOrigin === approvedOrigin) {
+    sendCommand(tabId, "Fetch.continueRequest", { requestId }).catch(function () {});
+    return;
+  }
+
+  blockedNavigations.push({ url, origin: targetOrigin });
+  sendCommand(tabId, "Fetch.failRequest", {
+    requestId,
+    errorReason: "Aborted",
+  }).catch(function () {});
 }
 
 /**
@@ -2098,11 +2176,12 @@ export async function goBack(tabId) {
  * @param {number} tabId - The ID of the tab to wait on.
  * @returns {Promise<void>}
  */
-export async function waitForPageSettle(tabId) {
+export async function waitForPageSettle(tabId, signal) {
   const startTime = Date.now();
   const maxWait = 10000;
 
   while (Date.now() - startTime < maxWait) {
+    if (signal?.aborted) return;
     try {
       const result = await sendCommand(tabId, "Runtime.evaluate", {
         expression: "document.readyState",
@@ -2117,6 +2196,7 @@ export async function waitForPageSettle(tabId) {
   if (networkEnabled) {
     let idleStart = Date.now();
     while (Date.now() - startTime < maxWait) {
+      if (signal?.aborted) return;
       if (pendingRequests === 0) {
         if (Date.now() - idleStart >= 500) break;
       } else {
@@ -2125,6 +2205,8 @@ export async function waitForPageSettle(tabId) {
       await sleep(100);
     }
   }
+
+  if (signal?.aborted) return;
 
   try {
     await sendCommand(tabId, "Runtime.evaluate", {
