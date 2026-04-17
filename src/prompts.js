@@ -8,7 +8,7 @@ const KEEP_LAST = 6;
 const ALL_ACTION_TYPES = [
   "click", "double_click", "triple_click", "type", "clear_and_type", "clear",
   "scroll", "navigate", "keypress", "hover", "drag", "focus", "select_option",
-  "upload_file", "go_back", "evaluate", "wait", "done", "fail",
+  "upload_file", "go_back", "wait", "done", "fail",
 ];
 
 const KEYBOARD_BLOCKED = new Set(["click", "double_click", "triple_click", "hover", "drag"]);
@@ -29,7 +29,6 @@ const ACTION_DOCS = {
   "select_option": `- "select_option": Select a dropdown option — set index to the select element's index and value to the option text or value`,
   "upload_file": `- "upload_file": Upload a bundled test fixture to an <input type="file"> (or a wrapper containing one). Set index to the target element and value to one of: "avatar.jpg" (portrait for profile pics), "photo.jpg" (landscape photo for generic image uploads), "document.pdf" (short PDF for document uploads), "data.csv" (sample CSV), "text.txt" (plain text). Pick the most semantically appropriate fixture for the field — e.g. "avatar.jpg" for "upload a profile picture", "document.pdf" for "attach your resume"`,
   "go_back": `- "go_back": Navigate back in browser history`,
-  "evaluate": `- "evaluate": Execute JavaScript expression in value on the page`,
   "wait": `- "wait": Wait for the page to load or settle`,
   "done": `- "done": The task is complete — set completed to true`,
   "fail": `- "fail": The task cannot be completed — set completed to true and explain in reasoning`,
@@ -98,7 +97,7 @@ If the element you need is not visible (e.g. it's behind a dropdown, modal, or n
     {
       "type": "${actionEnum}",
       "index": <number — the element index from the interactive elements list>,
-      "value": "<string — text to type, URL to navigate to, key name for keypress, option value for select_option, or JS expression for evaluate>",
+      "value": "<string — text to type, URL to navigate to, key name for keypress, or option value for select_option>",
       "deltaY": <number — scroll amount, negative = up, positive = down>,
       "x": <number — pixel x coordinate, ONLY as fallback when no indexed element matches>,
       "y": <number — pixel y coordinate, ONLY as fallback when no indexed element matches>

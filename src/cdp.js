@@ -2053,21 +2053,6 @@ export async function focusElement(tabId, index) {
 }
 
 /**
- * Evaluates a JavaScript expression in the tab's page context and returns the result.
- * @param {number} tabId - The ID of the tab to evaluate in.
- * @param {string} expression - The JavaScript expression to evaluate.
- * @returns {Promise<*>} The evaluated result value.
- */
-export async function evaluateJS(tabId, expression) {
-  const result = await sendCommand(tabId, "Runtime.evaluate", {
-    expression,
-    returnByValue: true,
-    awaitPromise: true,
-  });
-  return result.result?.value;
-}
-
-/**
  * Selects a dropdown option by value or visible text on a focused select element.
  * @param {number} tabId - The ID of the tab containing the dropdown.
  * @param {number} index - The element index of the select element.

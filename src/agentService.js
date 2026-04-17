@@ -22,7 +22,6 @@ import {
   clearInput,
   selectDropdownOption,
   goBack,
-  evaluateJS,
   navigateTo,
   waitForPageSettle,
   resolveElementCoordinates,
@@ -659,10 +658,6 @@ export default class AgentService {
 
       case "go_back":
         await goBack(this.tabId);
-        break;
-
-      case "evaluate":
-        await evaluateJS(this.tabId, action.value);
         break;
 
       case "navigate":
