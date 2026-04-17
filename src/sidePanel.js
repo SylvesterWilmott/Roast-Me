@@ -134,7 +134,6 @@ const personaCancelBtn = document.getElementById("persona-cancel-btn");
 const personaDeleteBtn = document.getElementById("persona-delete-btn");
 const stopBar = document.getElementById("stop-bar");
 const stopTestBtn = document.getElementById("stop-test-btn");
-const testOverlay = document.getElementById("test-overlay");
 const modelSelect = document.getElementById("model-select");
 const personaSightedToggle = document.getElementById("persona-sighted-toggle");
 const personaColorBlindnessSelect = document.getElementById("persona-colorblindness-select");
@@ -592,7 +591,6 @@ function resetChat() {
   mainTop.classList.remove("hidden");
   mainTop.insertBefore(inputWrap, mainFooter);
   stopBar.hidden = true;
-  testOverlay.hidden = true;
   inputArea.hidden = true;
   newTestBtn.hidden = true;
   sendBtn.classList.remove("stop");
@@ -616,7 +614,6 @@ function switchToChatLayout() {
  * Enters testing mode: shows the input area with input disabled and the stop button.
  */
 function showStopBar() {
-  testOverlay.hidden = false;
   inputArea.appendChild(inputWrap);
   inputArea.hidden = false;
   inputEl.setAttribute("contenteditable", "false");
@@ -631,7 +628,6 @@ function showStopBar() {
  * Exits testing mode: re-enables the chat input and send button.
  */
 function showChatInput() {
-  testOverlay.hidden = true;
   inputArea.appendChild(inputWrap);
   inputArea.hidden = false;
   inputEl.setAttribute("contenteditable", "plaintext-only");

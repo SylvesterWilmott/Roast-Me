@@ -617,14 +617,6 @@ body {
 .messages::-webkit-scrollbar { display: none; }
 .messages.visible { display: flex; }
 
-/* Test overlay */
-.test-overlay {
-  position: absolute;
-  inset: 0;
-  z-index: 2147483646;
-}
-.test-overlay[hidden] { display: none; }
-
 /* Stop bar */
 .stop-bar {
   position: absolute;
