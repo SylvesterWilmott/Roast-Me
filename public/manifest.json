@@ -1,0 +1,31 @@
+{
+  "name": "__MSG_EXT_NAME__",
+  "description": "__MSG_EXT_DESCRIPTION__",
+  "version": "1.0.0",
+  "minimum_chrome_version": "116",
+  "manifest_version": 3,
+  "default_locale": "en",
+  "permissions": ["debugger", "activeTab", "sidePanel", "storage", "tabs"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "side_panel": {
+    "default_path": "sidePanel/index.html"
+  },
+  "icons": {
+    "16": "icon/icon16.png",
+    "24": "icon/icon24.png",
+    "32": "icon/icon32.png",
+    "48": "icon/icon48.png",
+    "128": "icon/icon128.png"
+  },
+  "action": {
+    "default_title": "__MSG_EXT_NAME_SHORT__"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["fixtures/*"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

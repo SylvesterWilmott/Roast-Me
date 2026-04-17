@@ -1,0 +1,9 @@
+id,name,email,role,signup_date
+1,Alex Rivera,alex@example.test,Admin,2025-01-14
+2,Jordan Chen,jordan@example.test,Editor,2025-02-03
+3,Priya Patel,priya@example.test,Viewer,2025-02-27
+4,Sam O'Neil,sam@example.test,Editor,2025-03-11
+5,Nora Yamamoto,nora@example.test,Admin,2025-04-02
+6,Kai Johansson,kai@example.test,Viewer,2025-05-19
+7,Luna Fernandez,luna@example.test,Editor,2025-06-08
+8,Theo Abebe,theo@example.test,Viewer,2025-07-22

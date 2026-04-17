@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title data-i18n="APP_TITLE"></title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&family=Noto+Color+Emoji&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="header" class="app-header">
+    <span id="header-title" class="header-title" data-i18n="APP_TITLE"></span>
+    <button id="settings-btn" class="header-icon-btn" data-i18n-title="SETTINGS_BTN_TITLE"></button>
+  </div>
+
+  <div id="settings" class="settings">
+    <div id="api-key-section" class="settings-section" hidden>
+      <div class="settings-item">
+        <div class="settings-row">
+          <div class="settings-row-detail">
+            <span class="settings-row-title" data-i18n="API_KEY_LABEL"></span>
+          </div>
+          <button id="disconnect-btn" class="disconnect-btn" data-i18n="DISCONNECT"></button>
+        </div>
+      </div>
+    </div>
+    <span class="settings-section-title" data-i18n="CUSTOM_PERSONAS_TITLE"></span>
+    <div id="persona-section" class="settings-section">
+      <div id="persona-list"></div>
+      <button id="add-persona-btn" class="settings-item add-persona-btn" data-i18n="NEW_PERSONA"></button>
+    </div>
+  </div>
+
+  <div id="persona-dialog" class="dialog-overlay" hidden>
+    <div class="dialog">
+      <span id="dialog-title" class="t-heading" data-i18n="NEW_PERSONA"></span>
+      <div class="dialog-field">
+        <label class="settings-section-title" data-i18n="NAME_LABEL"></label>
+        <input type="text" id="persona-name-input" class="key-input" data-i18n-placeholder="NAME_PLACEHOLDER" />
+      </div>
+      <div class="dialog-field">
+        <label class="settings-section-title" data-i18n="DESCRIPTION_LABEL"></label>
+        <textarea id="persona-desc-input" class="text-input" rows="5" data-i18n-placeholder="DESCRIPTION_PLACEHOLDER"></textarea>
+      </div>
+
+      <div class="dialog-settings">
+      <span class="settings-section-title" data-i18n="TRAITS_VISION_TITLE"></span>
+      <div class="settings-section">
+        <div id="persona-sighted-item" class="settings-item">
+          <div class="settings-row">
+            <div class="settings-row-detail">
+              <span class="settings-row-title" data-i18n="TRAIT_SIGHTED_LABEL"></span>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="persona-sighted-toggle" />
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+        </div>
+        <div id="persona-colorblindness-item" class="settings-item">
+          <div class="settings-row">
+            <div class="settings-row-detail">
+              <span class="settings-row-title" data-i18n="TRAIT_COLOR_BLINDNESS_LABEL"></span>
+            </div>
+            <select id="persona-colorblindness-select" class="text-select">
+              <option value="none" data-i18n="TRAIT_CB_NONE"></option>
+              <option value="protanopia" data-i18n="TRAIT_CB_PROTANOPIA"></option>
+              <option value="deuteranopia" data-i18n="TRAIT_CB_DEUTERANOPIA"></option>
+              <option value="tritanopia" data-i18n="TRAIT_CB_TRITANOPIA"></option>
+              <option value="achromatopsia" data-i18n="TRAIT_CB_ACHROMATOPSIA"></option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <span class="settings-section-title" data-i18n="TRAITS_INTERACTION_TITLE"></span>
+      <div class="settings-section">
+        <div class="settings-item">
+          <div class="settings-row">
+            <div class="settings-row-detail">
+              <span class="settings-row-title" data-i18n="TRAIT_KEYBOARD_ONLY_LABEL"></span>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="persona-keyboard-only-toggle" />
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+        </div>
+      </div>
+      </div>
+
+      <div class="dialog-actions">
+        <button id="persona-delete-btn" class="persona-delete-btn" hidden data-i18n="DELETE"></button>
+        <button id="persona-cancel-btn" class="action-btn" data-i18n="CANCEL"></button>
+        <button id="persona-save-btn" class="btn-primary-sm" data-i18n="SAVE"></button>
+      </div>
+    </div>
+  </div>
+
+  <div id="app">
+
+    <!-- API Key View -->
+    <div id="key-view" class="view" hidden>
+      <div class="centered-content">
+        <div class="onboarding-intro">
+          <img src="../icon/icon128.png" class="logo" data-i18n-alt="APP_TITLE" />
+          <p class="t-display" data-i18n="APP_TITLE"></p>
+          <p class="t-subtitle" data-i18n="APP_SUBTITLE"></p>
+        </div>
+        <div class="onboarding-form">
+          <input type="password" id="api-key-input" class="key-input" data-i18n-placeholder="API_KEY_PLACEHOLDER" />
+          <button id="save-key-btn" class="btn-primary" data-i18n="SAVE_AND_CONTINUE"></button>
+          <p id="api-key-instructions" class="t-caption"></p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main View -->
+    <div id="main-view" class="view" hidden>
+      <div id="main-top" class="main-top">
+        <div class="main-greeting">
+          <span data-i18n="TEST_AS"></span>
+          <button id="persona-btn" class="persona-btn"></button>
+          <select id="persona-select" class="persona-select-hidden">
+            <option value="first-time" data-i18n="PERSONA_FIRST_TIME"></option>
+            <option value="power-user" data-i18n="PERSONA_POWER_USER"></option>
+            <option value="accessibility" data-i18n="PERSONA_ACCESSIBILITY"></option>
+            <option value="non-technical" data-i18n="PERSONA_NON_TECHNICAL"></option>
+            <option value="roaster" data-i18n="PERSONA_ROASTER"></option>
+          </select>
+        </div>
+        <div class="input-wrap">
+          <div class="input-row">
+            <div id="input" class="chat-input" contenteditable="plaintext-only" role="textbox" aria-multiline="true" data-i18n-data-placeholder="TASK_PLACEHOLDER"></div>
+          </div>
+          <div class="action-row">
+            <select id="model-select" class="model-select">
+              <option value="claude-sonnet-4-6" data-i18n="MODEL_SONNET"></option>
+              <option value="claude-opus-4-6" data-i18n="MODEL_OPUS"></option>
+              <option value="claude-haiku-4-5-20251001" data-i18n="MODEL_HAIKU"></option>
+            </select>
+            <button id="new-test-btn" class="action-btn" hidden data-i18n="NEW_TEST"></button>
+            <div class="action-row-spacer"></div>
+            <button id="send" class="send-btn"></button>
+          </div>
+        </div>
+        <p class="main-footer" data-i18n="TEST_HINT"></p>
+      </div>
+      <div id="test-overlay" class="test-overlay" hidden></div>
+      <div id="messages" class="messages"></div>
+      <div id="stop-bar" class="stop-bar" hidden>
+        <button id="stop-test-btn" class="btn-primary" data-i18n="STOP_TEST"></button>
+      </div>
+      <div id="input-area" class="input-area" hidden></div>
+    </div>
+
+  </div>
+  <script src="main.js"></script>
+</body>
+</html>

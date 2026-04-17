@@ -1,0 +1,9 @@
+Roast Me — sample text file.
+
+This file is a harmless placeholder used during UX tests when a
+persona needs to upload a plain-text document. It contains no
+meaningful content; its purpose is to satisfy file-type
+validations that check for a non-empty .txt payload.
+
+If you are reading this because a test uploaded it somewhere,
+the upload flow is working as intended.

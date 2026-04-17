@@ -1,0 +1,259 @@
+{
+  "EXT_NAME": {
+    "message": "Roast Me"
+  },
+  "EXT_NAME_SHORT": {
+    "message": "Roast Me"
+  },
+  "EXT_DESCRIPTION": {
+    "message": "AI-powered UX testing with persona simulation"
+  },
+  "APP_TITLE": {
+    "message": "Roast Me"
+  },
+  "APP_SUBTITLE": {
+    "message": "AI-powered UX testing that navigates your site and tells you what sucks."
+  },
+  "SETTINGS_TITLE": {
+    "message": "Settings"
+  },
+  "SETTINGS_BTN_TITLE": {
+    "message": "Settings"
+  },
+  "API_KEY_LABEL": {
+    "message": "Claude API Key"
+  },
+  "API_KEY_PLACEHOLDER": {
+    "message": "sk-ant-..."
+  },
+  "API_KEY_INSTRUCTIONS": {
+    "message": "To get started, get your API key from the $link_start$Anthropic Console$link_end$.",
+    "placeholders": {
+      "link_start": {
+        "content": "<a href='https://console.anthropic.com/settings/keys' target='_blank'>",
+        "example": "<a href='https://console.anthropic.com/settings/keys' target='_blank'>"
+      },
+      "link_end": {
+        "content": "</a>",
+        "example": "</a>"
+      }
+    }
+  },
+  "SAVE_AND_CONTINUE": {
+    "message": "Save & Continue"
+  },
+  "DISCONNECT": {
+    "message": "Disconnect"
+  },
+  "DISCONNECT_CONFIRM": {
+    "message": "Disconnect your API key?"
+  },
+  "TRAITS_VISION_TITLE": {
+    "message": "Vision"
+  },
+  "TRAITS_INTERACTION_TITLE": {
+    "message": "Interaction"
+  },
+  "TRAIT_SIGHTED_LABEL": {
+    "message": "Sighted"
+  },
+  "TRAIT_COLOR_BLINDNESS_LABEL": {
+    "message": "Color blindness"
+  },
+  "TRAIT_KEYBOARD_ONLY_LABEL": {
+    "message": "Keyboard only"
+  },
+  "TRAIT_CB_NONE": {
+    "message": "None"
+  },
+  "TRAIT_CB_PROTANOPIA": {
+    "message": "Protanopia (red-blind)"
+  },
+  "TRAIT_CB_DEUTERANOPIA": {
+    "message": "Deuteranopia (green-blind)"
+  },
+  "TRAIT_CB_TRITANOPIA": {
+    "message": "Tritanopia (blue-blind)"
+  },
+  "TRAIT_CB_ACHROMATOPSIA": {
+    "message": "Achromatopsia (no color)"
+  },
+  "CUSTOM_PERSONAS_TITLE": {
+    "message": "Custom Personas"
+  },
+  "NEW_PERSONA": {
+    "message": "New Persona"
+  },
+  "EDIT_PERSONA": {
+    "message": "Edit Persona"
+  },
+  "NAME_LABEL": {
+    "message": "Name"
+  },
+  "NAME_PLACEHOLDER": {
+    "message": "e.g. Busy Professional"
+  },
+  "DESCRIPTION_LABEL": {
+    "message": "Description"
+  },
+  "DESCRIPTION_PLACEHOLDER": {
+    "message": "e.g. Someone with limited time who wants to get things done quickly and gets frustrated by unnecessary steps."
+  },
+  "SAVE": {
+    "message": "Save"
+  },
+  "CANCEL": {
+    "message": "Cancel"
+  },
+  "DELETE": {
+    "message": "Delete"
+  },
+  "DELETE_PERSONA_CONFIRM": {
+    "message": "Delete this persona?"
+  },
+  "TEST_AS": {
+    "message": "Test as"
+  },
+  "PERSONA_FIRST_TIME": {
+    "message": "First-time Visitor"
+  },
+  "PERSONA_FIRST_TIME_DESC": {
+    "message": "A first-time visitor with zero context about this product, its competitors, or its vocabulary. Forms snap judgments in the opening seconds — if the page doesn't explain what it is and why they'd care, they're gone. Gets overwhelmed by dense UI, unclear calls to action, or anything that feels like work before they've decided it's worth their time."
+  },
+  "PERSONA_POWER_USER": {
+    "message": "Power User"
+  },
+  "PERSONA_POWER_USER_DESC": {
+    "message": "A fast, confident user who lives in tools like this all day. Expects keyboard shortcuts, bulk actions, dense information, and zero hand-holding. Gets visibly annoyed by intrusive modals, condescending tooltips, laggy interactions, or any UI that treats them like a beginner."
+  },
+  "PERSONA_ACCESSIBILITY": {
+    "message": "Accessibility-focused"
+  },
+  "PERSONA_ACCESSIBILITY_DESC": {
+    "message": "A user who relies on assistive tech — screen readers, keyboard-only navigation, high-contrast modes. Judges the site on whether every control is reachable by Tab, whether labels and alt text convey real meaning, whether focus order is logical, and whether dynamic updates are announced. Gets stuck and frustrated anywhere contrast is poor, labels are missing, or focus silently vanishes."
+  },
+  "PERSONA_NON_TECHNICAL": {
+    "message": "Non-technical User"
+  },
+  "PERSONA_NON_TECHNICAL_DESC": {
+    "message": "Someone uncomfortable with jargon, nested settings, or anything that looks like 'admin.' Wants plain-language labels, obvious next steps, and friendly feedback when something works. Intimidated by error messages and unfamiliar terms like 'workspace' or 'API key,' and will give up rather than guess what a cryptic button does."
+  },
+  "PERSONA_ROASTER": {
+    "message": "Roaster"
+  },
+  "PERSONA_ROASTER_DESC": {
+    "message": "A brutally honest, sharp-tongued critic with a gift for spotting UX flaws and a zero-tolerance policy for lazy design. Notices every awkward label, weird alignment, patronizing copy, and baffling interaction, and calls them out with dry wit. Not cruel for its own sake — just allergic to the bare minimum. Treats this session like stand-up material, not a bug report."
+  },
+  "MODEL_SONNET": {
+    "message": "Sonnet 4.6"
+  },
+  "MODEL_OPUS": {
+    "message": "Opus 4.6"
+  },
+  "MODEL_HAIKU": {
+    "message": "Haiku 4.5"
+  },
+  "TASK_PLACEHOLDER": {
+    "message": "Describe a task to test..."
+  },
+  "CHAT_PLACEHOLDER": {
+    "message": "Chat about the session..."
+  },
+  "TEST_HINT": {
+    "message": "Try things like \"Sign up for an account\" or \"Find the pricing page\""
+  },
+  "NEW_TEST": {
+    "message": "New Test"
+  },
+  "STOP_TEST": {
+    "message": "Stop Test"
+  },
+  "STARTING_TEST": {
+    "message": "Starting test..."
+  },
+  "TEST_COMPLETED": {
+    "message": "Test completed — $steps$ steps.",
+    "placeholders": {
+      "steps": {
+        "content": "$1",
+        "example": "5"
+      }
+    }
+  },
+  "TEST_STOPPED": {
+    "message": "Stopped: $details$",
+    "placeholders": {
+      "details": {
+        "content": "$1",
+        "example": "User cancelled"
+      }
+    }
+  },
+  "TEST_ERROR": {
+    "message": "Error: $details$",
+    "placeholders": {
+      "details": {
+        "content": "$1",
+        "example": "Failed to connect"
+      }
+    }
+  },
+  "ACTION_FAILED": {
+    "message": "[$action$ failed]",
+    "placeholders": {
+      "action": {
+        "content": "$1",
+        "example": "click"
+      }
+    }
+  },
+  "SAVE_API_KEY_ERROR": {
+    "message": "Failed to save API key: $details$",
+    "placeholders": {
+      "details": {
+        "content": "$1",
+        "example": "Storage quota exceeded"
+      }
+    }
+  },
+  "API_KEY_NOT_CONFIGURED": {
+    "message": "Claude API key not configured"
+  },
+  "RATE_LIMIT_ERROR": {
+    "message": "Claude rate limit exceeded. Please wait and try again."
+  },
+  "INVALID_API_KEY_ERROR": {
+    "message": "Invalid Claude API key. Please check your key and try again."
+  },
+  "API_ERROR": {
+    "message": "Claude API error ($status$): $details$",
+    "placeholders": {
+      "status": {
+        "content": "$1",
+        "example": "500"
+      },
+      "details": {
+        "content": "$2",
+        "example": "Internal server error"
+      }
+    }
+  },
+  "CLAUDE_ERROR": {
+    "message": "Claude error: $details$",
+    "placeholders": {
+      "details": {
+        "content": "$1",
+        "example": "Unknown error"
+      }
+    }
+  },
+  "THINKING": {
+    "message": "Thinking..."
+  },
+  "EMPTY_RESPONSE_ERROR": {
+    "message": "Claude returned an empty response"
+  },
+  "NO_TEXT_CONTENT_ERROR": {
+    "message": "Claude returned no text content"
+  }
+}
