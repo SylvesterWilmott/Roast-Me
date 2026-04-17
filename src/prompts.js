@@ -7,7 +7,7 @@ const KEEP_LAST = 6;
 
 const ALL_ACTION_TYPES = [
   "click", "double_click", "triple_click", "type", "clear_and_type", "clear",
-  "scroll", "navigate", "keypress", "hover", "drag", "focus", "select_option",
+  "scroll", "keypress", "hover", "drag", "focus", "select_option",
   "upload_file", "go_back", "wait", "done", "fail",
 ];
 
@@ -21,7 +21,6 @@ const ACTION_DOCS = {
   "clear_and_type": `- "clear_and_type": Select all text in the focused input and replace it with value`,
   "clear": `- "clear": Clear the currently focused input field`,
   "scroll": `- "scroll": Scroll by deltaY pixels (positive = down, negative = up). Omit index/x/y for a page scroll at viewport center. Set "index" to scroll inside a specific container (sidebar, modal, scrollable panel) — the gesture is dispatched at that element's center`,
-  "navigate": `- "navigate": Navigate to the URL in value`,
   "keypress": `- "keypress": Press a key or key chord. Plain keys: Enter, Tab, Escape, Backspace, Delete, Space, ArrowUp/Down/Left/Right, Home, End, PageUp, PageDown. Chords use "Modifier+Key" with modifiers Shift / Ctrl / Control / Alt / Meta / Cmd / Command. Examples: "Shift+Tab" (reverse tab), "Ctrl+a" / "Cmd+a" (select all), "Cmd+z" (undo), "Ctrl+Shift+Tab", "Alt+ArrowLeft"`,
   "hover": `- "hover": Hover over element by index to reveal tooltips, dropdowns, or hover states`,
   "drag": `- "drag": Drag from element at index to x,y destination coordinates`,
@@ -97,7 +96,7 @@ If the element you need is not visible (e.g. it's behind a dropdown, modal, or n
     {
       "type": "${actionEnum}",
       "index": <number — the element index from the interactive elements list>,
-      "value": "<string — text to type, URL to navigate to, key name for keypress, or option value for select_option>",
+      "value": "<string — text to type, key name for keypress, or option value for select_option>",
       "deltaY": <number — scroll amount, negative = up, positive = down>,
       "x": <number — pixel x coordinate, ONLY as fallback when no indexed element matches>,
       "y": <number — pixel y coordinate, ONLY as fallback when no indexed element matches>

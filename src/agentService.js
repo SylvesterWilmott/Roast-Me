@@ -22,7 +22,6 @@ import {
   clearInput,
   selectDropdownOption,
   goBack,
-  navigateTo,
   waitForPageSettle,
   resolveElementCoordinates,
   scaleCoordinatesFromScreenshot,
@@ -37,7 +36,7 @@ const MAX_STEPS = 30;
 const MAX_CONSECUTIVE_FAILURES = 3;
 const MAX_ACTIONS_PER_STEP = 4;
 const TERMINAL_ACTIONS = new Set(["done", "fail"]);
-const PAGE_CHANGING_ACTIONS = new Set(["navigate", "go_back", "click"]);
+const PAGE_CHANGING_ACTIONS = new Set(["go_back", "click"]);
 const LOOP_WINDOW_SIZE = 20;
 const STAGNANT_THRESHOLD = 5;
 
@@ -180,8 +179,6 @@ class ActionLoopDetector {
         const dir = (action.deltaY || 0) > 0 ? "down" : "up";
         return `scroll:${dir}:${action.index !== undefined ? action.index : ""}`;
       }
-      case "navigate":
-        return `navigate:${action.value || ""}`;
       case "keypress":
         return `keypress:${action.value || ""}`;
       default:
@@ -658,10 +655,6 @@ export default class AgentService {
 
       case "go_back":
         await goBack(this.tabId);
-        break;
-
-      case "navigate":
-        await navigateTo(this.tabId, action.value);
         break;
 
       case "wait":

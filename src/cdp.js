@@ -2094,17 +2094,6 @@ export async function goBack(tabId) {
 }
 
 /**
- * Navigates the tab to a new URL and waits for the page to settle.
- * @param {number} tabId - The ID of the tab to navigate.
- * @param {string} url - The URL to navigate to.
- * @returns {Promise<void>}
- */
-export async function navigateTo(tabId, url) {
-  await sendCommand(tabId, "Page.navigate", { url });
-  await waitForPageSettle(tabId);
-}
-
-/**
  * Waits for page readyState, network idle, and DOM stability before proceeding.
  * @param {number} tabId - The ID of the tab to wait on.
  * @returns {Promise<void>}
