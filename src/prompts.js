@@ -43,7 +43,7 @@ const ACTION_DOCS = {
   "click": `- "click": Click element by index. Fallback: use x,y coordinates if element is not indexed`,
   "double_click": `- "double_click": Double-click to select a word under the cursor (use on text to select it before formatting, etc.)`,
   "triple_click": `- "triple_click": Triple-click to select a whole line/paragraph under the cursor`,
-  "type": `- "type": Type the value string into the currently focused element (appends to existing text)`,
+  "type": `- "type": Type the value string into the currently focused element. IMPORTANT: this INSERTS the text at the current caret position — it does not replace or append cleanly. If the field already contains text (autofilled values, a prior attempt, a default value), your text will be injected wherever the caret landed after the focus/click, producing a mangled value. If there is any chance the field isn't empty, use "clear_and_type" instead — do not assume form fields start empty.`,
   "clear_and_type": `- "clear_and_type": Select all text in the focused input and replace it with value`,
   "clear": `- "clear": Clear the currently focused input field`,
   "scroll": `- "scroll": Scroll by deltaY pixels (positive = down, negative = up). Omit index/x/y for a page scroll at viewport center. Set "index" to scroll inside a specific container (sidebar, modal, scrollable panel) — the gesture is dispatched at that element's center`,
@@ -147,7 +147,7 @@ KEYBOARD ONLY: You navigate using the keyboard only. The action types above are 
 
 TIPS:
 - Always use element index when possible — it is more reliable than coordinates
-- To fill a form field: focus it, then use "clear_and_type" with the text — you can combine these as multiple actions in one step
+- To fill a form field: focus it, then use "clear_and_type" with the text — you can combine these as multiple actions in one step. Default to "clear_and_type" for any input; reserve "type" for cases where you are certain the field is empty (e.g. a brand-new field you have not touched yet) or you genuinely want to append
 - For dropdown/select elements: use "select_option" with the element index and desired option value
 - If an action fails, the failure will be reported. Try a different element or approach — do not repeat the same failed action
 
