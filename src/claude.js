@@ -29,7 +29,13 @@ export default class ClaudeClient {
       model: this.model,
       max_tokens: 2048,
       temperature: 0.2,
-      system: systemPrompt,
+      system: [
+        {
+          type: "text",
+          text: systemPrompt,
+          cache_control: { type: "ephemeral" },
+        },
+      ],
       messages: [
         {
           role: "user",
@@ -84,7 +90,13 @@ export default class ClaudeClient {
       model: this.model,
       max_tokens: 2048,
       temperature: 0.5,
-      system: systemPrompt,
+      system: [
+        {
+          type: "text",
+          text: systemPrompt,
+          cache_control: { type: "ephemeral" },
+        },
+      ],
       messages: messages,
     };
 
@@ -104,7 +116,13 @@ export default class ClaudeClient {
       model: this.model,
       max_tokens: 8192,
       temperature: 0.5,
-      system: systemPrompt,
+      system: [
+        {
+          type: "text",
+          text: systemPrompt,
+          cache_control: { type: "ephemeral" },
+        },
+      ],
       messages: messages,
       stream: true,
     };

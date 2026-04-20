@@ -33,6 +33,10 @@ import {
   buildSystemPrompt,
   buildStepPrompt,
 } from "./prompts.js";
+import { resizeBase64Image } from "./image.js";
+
+const LLM_SCREENSHOT_MAX_WIDTH = 1024;
+const LLM_SCREENSHOT_QUALITY = 0.85;
 
 const MAX_STEPS = 30;
 const MAX_CONSECUTIVE_FAILURES = 3;
@@ -387,6 +391,15 @@ export default class AgentService {
       }
 
       const sighted = this.persona && this.persona.sighted !== false;
+      let llmImage = null;
+      if (sighted) {
+        try {
+          llmImage = await resizeBase64Image(pageState.screenshot, "image/png", LLM_SCREENSHOT_MAX_WIDTH, LLM_SCREENSHOT_QUALITY);
+        } catch (err) {
+          console.warn("[Agent] Screenshot resize failed, sending original:", err.message);
+          llmImage = { data: pageState.screenshot, mediaType: "image/png" };
+        }
+      }
       const userParts = sighted
         ? [
             { type: "text", text: stepPrompt },
@@ -394,8 +407,8 @@ export default class AgentService {
               type: "image",
               source: {
                 type: "base64",
-                media_type: "image/png",
-                data: pageState.screenshot,
+                media_type: llmImage.mediaType,
+                data: llmImage.data,
               },
             },
           ]
