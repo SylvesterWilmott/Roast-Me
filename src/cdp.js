@@ -1452,8 +1452,58 @@ async function getFocusedElementInfo(tabId) {
   }
 }
 
+const CHAR_KEY_MAP = {
+  " ": { code: "Space", windowsVirtualKeyCode: 32, shift: false },
+  "`": { code: "Backquote", windowsVirtualKeyCode: 192, shift: false },
+  "-": { code: "Minus", windowsVirtualKeyCode: 189, shift: false },
+  "=": { code: "Equal", windowsVirtualKeyCode: 187, shift: false },
+  "[": { code: "BracketLeft", windowsVirtualKeyCode: 219, shift: false },
+  "]": { code: "BracketRight", windowsVirtualKeyCode: 221, shift: false },
+  "\\": { code: "Backslash", windowsVirtualKeyCode: 220, shift: false },
+  ";": { code: "Semicolon", windowsVirtualKeyCode: 186, shift: false },
+  "'": { code: "Quote", windowsVirtualKeyCode: 222, shift: false },
+  ",": { code: "Comma", windowsVirtualKeyCode: 188, shift: false },
+  ".": { code: "Period", windowsVirtualKeyCode: 190, shift: false },
+  "/": { code: "Slash", windowsVirtualKeyCode: 191, shift: false },
+  "!": { code: "Digit1", windowsVirtualKeyCode: 49, shift: true },
+  "@": { code: "Digit2", windowsVirtualKeyCode: 50, shift: true },
+  "#": { code: "Digit3", windowsVirtualKeyCode: 51, shift: true },
+  "$": { code: "Digit4", windowsVirtualKeyCode: 52, shift: true },
+  "%": { code: "Digit5", windowsVirtualKeyCode: 53, shift: true },
+  "^": { code: "Digit6", windowsVirtualKeyCode: 54, shift: true },
+  "&": { code: "Digit7", windowsVirtualKeyCode: 55, shift: true },
+  "*": { code: "Digit8", windowsVirtualKeyCode: 56, shift: true },
+  "(": { code: "Digit9", windowsVirtualKeyCode: 57, shift: true },
+  ")": { code: "Digit0", windowsVirtualKeyCode: 48, shift: true },
+  "~": { code: "Backquote", windowsVirtualKeyCode: 192, shift: true },
+  "_": { code: "Minus", windowsVirtualKeyCode: 189, shift: true },
+  "+": { code: "Equal", windowsVirtualKeyCode: 187, shift: true },
+  "{": { code: "BracketLeft", windowsVirtualKeyCode: 219, shift: true },
+  "}": { code: "BracketRight", windowsVirtualKeyCode: 221, shift: true },
+  "|": { code: "Backslash", windowsVirtualKeyCode: 220, shift: true },
+  ":": { code: "Semicolon", windowsVirtualKeyCode: 186, shift: true },
+  "\"": { code: "Quote", windowsVirtualKeyCode: 222, shift: true },
+  "<": { code: "Comma", windowsVirtualKeyCode: 188, shift: true },
+  ">": { code: "Period", windowsVirtualKeyCode: 190, shift: true },
+  "?": { code: "Slash", windowsVirtualKeyCode: 191, shift: true },
+};
+for (let i = 0; i < 26; i++) {
+  const lower = String.fromCharCode(97 + i);
+  const upper = String.fromCharCode(65 + i);
+  const code = `Key${upper}`;
+  const windowsVirtualKeyCode = 65 + i;
+  CHAR_KEY_MAP[lower] = { code, windowsVirtualKeyCode, shift: false };
+  CHAR_KEY_MAP[upper] = { code, windowsVirtualKeyCode, shift: true };
+}
+for (let i = 0; i <= 9; i++) {
+  CHAR_KEY_MAP[String(i)] = { code: `Digit${i}`, windowsVirtualKeyCode: 48 + i, shift: false };
+}
+
 /**
  * Types text character-by-character via CDP key events, firing the full keyDown/char/keyUp pipeline.
+ * Printable ASCII characters resolve to accurate `code` / `windowsVirtualKeyCode` / shift metadata via
+ * CHAR_KEY_MAP; anything outside the map (CJK, emoji, accented letters, dead-key sequences) falls
+ * through with empty key metadata and is delivered via the `char` event's `text` field.
  * @param {number} tabId - The ID of the tab to type into.
  * @param {string} text - The text to type.
  * @returns {Promise<void>}
@@ -1461,32 +1511,24 @@ async function getFocusedElementInfo(tabId) {
 async function typeCharByChar(tabId, text) {
   for (let i = 0; i < text.length; i++) {
     const char = text[i];
-    const upper = char.toUpperCase();
-    let code = "";
-    let vkCode = 0;
-
-    if (upper >= "A" && upper <= "Z") {
-      code = `Key${upper}`;
-      vkCode = upper.charCodeAt(0);
-    } else if (char >= "0" && char <= "9") {
-      code = `Digit${char}`;
-      vkCode = char.charCodeAt(0);
-    } else if (char === " ") {
-      code = "Space";
-      vkCode = 32;
-    }
+    const mapping = CHAR_KEY_MAP[char];
+    const code = mapping?.code ?? "";
+    const vkCode = mapping?.windowsVirtualKeyCode ?? 0;
+    const modifiers = mapping?.shift ? 8 : 0;
 
     await sendCommand(tabId, "Input.dispatchKeyEvent", {
       type: "keyDown",
       key: char,
       code,
       windowsVirtualKeyCode: vkCode,
+      modifiers,
     });
 
     await sendCommand(tabId, "Input.dispatchKeyEvent", {
       type: "char",
       text: char,
       unmodifiedText: char,
+      modifiers,
     });
 
     await sendCommand(tabId, "Input.dispatchKeyEvent", {
@@ -1494,6 +1536,7 @@ async function typeCharByChar(tabId, text) {
       key: char,
       code,
       windowsVirtualKeyCode: vkCode,
+      modifiers,
     });
 
     if (i < text.length - 1) {
