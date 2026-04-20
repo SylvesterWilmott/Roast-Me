@@ -5,7 +5,7 @@
   "minimum_chrome_version": "116",
   "manifest_version": 3,
   "default_locale": "en",
-  "permissions": ["debugger", "activeTab", "sidePanel", "storage", "tabs"],
+  "permissions": ["debugger", "sidePanel", "storage"],
   "background": {
     "service_worker": "background.js"
   },
