@@ -72,6 +72,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: flex-end;
+  gap: 4px;
   padding: 0 12px;
   background: var(--background);
 }
@@ -234,6 +235,10 @@ body {
   color: var(--on-surface-variant);
   display: block;
   padding: 8px 12px 4px;
+}
+.settings-section-title.is-required::after {
+  content: ' *';
+  color: var(--red);
 }
 
 /* Persona list in settings */
@@ -897,7 +902,12 @@ body {
 }
 .send-btn:hover:not(:disabled) { background: var(--surface-container); }
 .send-btn:disabled { opacity: 0.3; cursor: default; }
+.send-btn[hidden] { display: none; }
 .send-btn.stop::before {
   -webkit-mask-image: url('images/stop.svg');
   mask-image: url('images/stop.svg');
+}
+.send-btn.export-btn::before {
+  -webkit-mask-image: url('images/download.svg');
+  mask-image: url('images/download.svg');
 }

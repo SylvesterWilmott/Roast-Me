@@ -235,18 +235,18 @@ class ActionLoopDetector {
     }
     const maxRepeats = Math.max(0, ...Object.values(counts));
 
-    if (maxRepeats >= 12) {
-      return "WARNING: You have been repeating similar actions many times. You appear to be stuck in a loop. Try a completely different approach or use 'fail' if the task cannot be completed.";
+    if (maxRepeats >= 6) {
+      return "STOP. You have repeated the same action many times without progress. Use 'fail' NOW with reasoning that (a) describes what you've tried, (b) what's blocking you, and (c) a specific question asking the researcher how to proceed.";
     }
-    if (maxRepeats >= 8) {
-      return "You seem to be repeating similar actions. Are you still making progress toward the goal? Consider trying a different approach.";
+    if (maxRepeats >= 4) {
+      return "You've repeated this action several times. If it's not moving things forward, use 'fail' with a specific question for the researcher about what to try next — a human would ask for guidance here, not keep retrying.";
     }
-    if (maxRepeats >= 5) {
-      return "I notice you've performed similar actions several times. If this is intentional, carry on. Otherwise, consider a different strategy.";
+    if (maxRepeats >= 3) {
+      return "You've tried this a few times already. If it's not working, either take a genuinely different approach or use 'fail' to ask the researcher for guidance rather than continuing to retry.";
     }
 
     if (this.stagnantCount >= STAGNANT_THRESHOLD) {
-      return "The page hasn't changed in several steps. Try scrolling, clicking something different, or navigating to a new page.";
+      return "The page hasn't changed in several steps. Try scrolling or clicking something different — or, if you're stuck, use 'fail' to ask the researcher how to proceed.";
     }
 
     return null;
@@ -348,11 +348,20 @@ export default class AgentService {
 
       const blocked = consumeBlockedNavigations();
       if (blocked.length > 0) {
-        const targets = blocked.map(function (b) { return b.origin; }).join(", ");
+        const targetHosts = Array.from(new Set(blocked.map(function (b) {
+          try { return new URL(b.url).hostname; } catch (err) { return b.origin; }
+        }))).join(", ");
+
+        let startHost = "the starting site";
+        if (this.approvedOrigin) {
+          try { startHost = new URL(this.approvedOrigin).hostname; }
+          catch (err) { startHost = this.approvedOrigin; }
+        }
+
         const blockedStep = {
           stepNumber,
           action: { type: "blocked" },
-          reasoning: `The last action tried to navigate off the starting site to ${targets}. The request was cancelled before it loaded — the tab stayed on the starting site. I'll try a different approach that keeps the test on the starting site.`,
+          reasoning: `That would've taken me off ${startHost} to ${targetHosts} — this test stays on the site I started on. Backing up to try a different path.`,
           observation: "",
           sentiment: "neutral",
           screenshot: pageState.screenshot,
@@ -360,7 +369,7 @@ export default class AgentService {
           gesture: null,
           url: pageState.metadata.url,
           success: false,
-          error: `Cross-origin navigation blocked: ${targets}`,
+          error: `Navigation to ${targetHosts} blocked — tests are scoped to ${startHost}.`,
         };
         this.sessionHistory.push(blockedStep);
         if (onStepCallback) onStepCallback(blockedStep);

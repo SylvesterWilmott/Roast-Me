@@ -12,6 +12,7 @@
 <body>
   <div id="header" class="app-header">
     <span id="header-title" class="header-title" data-i18n="APP_TITLE"></span>
+    <button id="new-test-btn" class="action-btn" hidden data-i18n="NEW_TEST"></button>
     <button id="settings-btn" class="header-icon-btn" data-i18n-title="SETTINGS_BTN_TITLE"></button>
   </div>
 
@@ -37,15 +38,43 @@
     <div class="dialog">
       <span id="dialog-title" class="t-heading" data-i18n="NEW_PERSONA"></span>
       <div class="dialog-field">
-        <label class="settings-section-title" data-i18n="NAME_LABEL"></label>
+        <label class="settings-section-title is-required" data-i18n="NAME_LABEL"></label>
         <input type="text" id="persona-name-input" class="key-input" data-i18n-placeholder="NAME_PLACEHOLDER" />
       </div>
       <div class="dialog-field">
-        <label class="settings-section-title" data-i18n="DESCRIPTION_LABEL"></label>
+        <label class="settings-section-title is-required" data-i18n="DESCRIPTION_LABEL"></label>
         <textarea id="persona-desc-input" class="text-input" rows="5" data-i18n-placeholder="DESCRIPTION_PLACEHOLDER"></textarea>
       </div>
 
       <div class="dialog-settings">
+      <span class="settings-section-title" data-i18n="TRAITS_PROFILE_TITLE"></span>
+      <div class="settings-section">
+        <div class="settings-item">
+          <div class="settings-row">
+            <div class="settings-row-detail">
+              <span class="settings-row-title" data-i18n="TRAIT_AGE_BAND_LABEL"></span>
+            </div>
+            <select id="persona-age-band-select" class="text-select">
+              <option value="teen" data-i18n="TRAIT_AGE_TEEN"></option>
+              <option value="adult" data-i18n="TRAIT_AGE_ADULT"></option>
+              <option value="older-adult" data-i18n="TRAIT_AGE_OLDER"></option>
+            </select>
+          </div>
+        </div>
+        <div class="settings-item">
+          <div class="settings-row">
+            <div class="settings-row-detail">
+              <span class="settings-row-title" data-i18n="TRAIT_TECH_LITERACY_LABEL"></span>
+            </div>
+            <select id="persona-tech-literacy-select" class="text-select">
+              <option value="low" data-i18n="TRAIT_TECH_LOW"></option>
+              <option value="medium" data-i18n="TRAIT_TECH_MEDIUM"></option>
+              <option value="high" data-i18n="TRAIT_TECH_HIGH"></option>
+            </select>
+          </div>
+        </div>
+      </div>
+
       <span class="settings-section-title" data-i18n="TRAITS_VISION_TITLE"></span>
       <div class="settings-section">
         <div id="persona-sighted-item" class="settings-item">
@@ -141,8 +170,8 @@
               <option value="claude-opus-4-6" data-i18n="MODEL_OPUS"></option>
               <option value="claude-haiku-4-5-20251001" data-i18n="MODEL_HAIKU"></option>
             </select>
-            <button id="new-test-btn" class="action-btn" hidden data-i18n="NEW_TEST"></button>
             <div class="action-row-spacer"></div>
+            <button id="export-btn" class="send-btn export-btn" hidden data-i18n-title="EXPORT_BTN_TITLE"></button>
             <button id="send" class="send-btn"></button>
           </div>
         </div>

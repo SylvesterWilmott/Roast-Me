@@ -48,6 +48,33 @@
   "DISCONNECT_CONFIRM": {
     "message": "Disconnect your API key?"
   },
+  "TRAITS_PROFILE_TITLE": {
+    "message": "Profile"
+  },
+  "TRAIT_AGE_BAND_LABEL": {
+    "message": "Age"
+  },
+  "TRAIT_AGE_TEEN": {
+    "message": "Teen"
+  },
+  "TRAIT_AGE_ADULT": {
+    "message": "Adult"
+  },
+  "TRAIT_AGE_OLDER": {
+    "message": "Older adult"
+  },
+  "TRAIT_TECH_LITERACY_LABEL": {
+    "message": "Tech literacy"
+  },
+  "TRAIT_TECH_LOW": {
+    "message": "Low"
+  },
+  "TRAIT_TECH_MEDIUM": {
+    "message": "Medium"
+  },
+  "TRAIT_TECH_HIGH": {
+    "message": "High"
+  },
   "TRAITS_VISION_TITLE": {
     "message": "Vision"
   },
@@ -164,6 +191,9 @@
   },
   "NEW_TEST": {
     "message": "New Test"
+  },
+  "EXPORT_BTN_TITLE": {
+    "message": "Export session"
   },
   "STOP_TEST": {
     "message": "Stop Test"

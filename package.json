@@ -33,6 +33,7 @@
     "zip-webpack-plugin": "^4.0.1"
   },
   "dependencies": {
+    "jszip": "^3.10.1",
     "marked": "^18.0.0"
   }
 }

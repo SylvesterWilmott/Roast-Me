@@ -13,6 +13,32 @@ const ALL_ACTION_TYPES = [
 
 const KEYBOARD_BLOCKED = new Set(["click", "double_click", "triple_click", "hover", "drag"]);
 
+/**
+ * Renders non-default structured persona fields (ageBand, techLiteracy) as
+ * explicit constraints for the LLM. Defaults (adult, medium) emit nothing.
+ * @param {Object} persona
+ * @returns {string}
+ */
+function buildPersonaConstraints(persona) {
+  const lines = [];
+  const age = (persona && persona.ageBand) || "adult";
+  const lit = (persona && persona.techLiteracy) || "medium";
+
+  if (age === "teen") {
+    lines.push("Age: teenager. You move fast, are comfortable with mobile-native patterns, and have low patience for slow UIs or formal corporate tone.");
+  } else if (age === "older-adult") {
+    lines.push("Age: older adult (60s–70s). Small text, tiny tap targets, and rapidly changing UIs are harder for you; you prefer clear labels over ambiguous icons and move more deliberately.");
+  }
+
+  if (lit === "low") {
+    lines.push("Tech literacy: low. Jargon like 'API', 'workspace', 'sync', or 'integration' confuses or intimidates you; you hesitate before clicking anything that looks advanced and rely on plain-language labels over icons.");
+  } else if (lit === "high") {
+    lines.push("Tech literacy: high. You're comfortable with keyboard shortcuts, dense UIs, domain jargon, and advanced settings; you're impatient with over-explanation or hand-holding.");
+  }
+
+  return lines.length > 0 ? "PERSONA CONSTRAINTS:\n- " + lines.join("\n- ") : "";
+}
+
 const ACTION_DOCS = {
   "click": `- "click": Click element by index. Fallback: use x,y coordinates if element is not indexed`,
   "double_click": `- "double_click": Double-click to select a word under the cursor (use on text to select it before formatting, etc.)`,
@@ -30,7 +56,7 @@ const ACTION_DOCS = {
   "go_back": `- "go_back": Navigate back in browser history`,
   "wait": `- "wait": Wait for the page to load or settle`,
   "done": `- "done": The task is complete — set completed to true`,
-  "fail": `- "fail": The task cannot be completed — set completed to true and explain in reasoning`,
+  "fail": `- "fail": Stop the session. Use this when the task genuinely can't be completed OR when you've tried the same approach 2–3 times without progress and need the researcher's guidance. Set completed to true. Reasoning must state (a) what you've tried, (b) what you think is blocking you, and (c) — if you're stuck rather than certain it's impossible — a specific question asking the researcher what to try next.`,
 };
 
 /**
@@ -52,7 +78,10 @@ export function buildSystemPrompt(persona, productContext) {
   const actionEnum = actionTypes.join(" | ");
   const actionDocs = actionTypes.map(function (t) { return ACTION_DOCS[t]; }).join("\n");
 
-  let prompt = `You are a UX testing agent. You are acting as ${persona.name}: ${persona.description}
+  const constraints = buildPersonaConstraints(persona);
+  const constraintsBlock = constraints ? `\n\n${constraints}` : "";
+
+  let prompt = `You are a UX testing agent. You are acting as ${persona.name}: ${persona.description}${constraintsBlock}
 
 You are navigating a real website and evaluating it from this persona's perspective. Your job is to complete a given task while observing the user experience along the way.
 
@@ -123,6 +152,8 @@ TIPS:
 - If an action fails, the failure will be reported. Try a different element or approach — do not repeat the same failed action
 
 FAILURE RECOVERY: If a previous action failed, think about why and try a different approach. Do not repeat the exact same action that just failed.
+
+GETTING UNSTUCK: If you've tried the same approach 2–3 times without making progress, stop — don't keep retrying. Use the "fail" action and write reasoning that (a) describes what you've tried, (b) what you think is blocking you, and (c) a specific question for the researcher about how to proceed. This is not giving up — it's handing the researcher a clear, actionable ask so they can guide the next attempt. A human in your position would pause and ask; so should you.
 
 SAFETY: This is a real website and your actions have real consequences. Do NOT:
 - Complete real purchases or enter payment information
@@ -312,7 +343,10 @@ function estimateHistoryChars(sessionHistory) {
  * @returns {string} The system prompt with persona context and session transcript.
  */
 export function buildChatSystemPrompt(persona, task, sessionHistory) {
-  let prompt = `You are ${persona.name}: ${persona.description}
+  const constraints = buildPersonaConstraints(persona);
+  const constraintsBlock = constraints ? `\n\n${constraints}` : "";
+
+  let prompt = `You are ${persona.name}: ${persona.description}${constraintsBlock}
 
 You just completed a UX testing session on a website. A researcher is interviewing you about your experience. Respond in first person as the persona — be natural, honest, and specific about what you observed. You can use inline Markdown formatting (bold, italic, lists) to structure your responses when helpful. Do not use headings.
 

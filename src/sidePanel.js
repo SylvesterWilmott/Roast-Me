@@ -6,6 +6,7 @@ import ChromeUtils from "./promisify.js";
 import ClaudeClient from "./claude.js";
 import { buildChatSystemPrompt } from "./prompts.js";
 import { marked } from "marked";
+import JSZip from "jszip";
 
 marked.setOptions({
   breaks: false,
@@ -51,6 +52,8 @@ const DEFAULT_TRAITS = {
   sighted: true,
   colorBlindness: "none",
   keyboardOnly: false,
+  ageBand: "adult",
+  techLiteracy: "medium",
 };
 
 const PERSONA_PRESETS = {
@@ -63,6 +66,7 @@ const PERSONA_PRESETS = {
     name: msg("PERSONA_POWER_USER"),
     description: msg("PERSONA_POWER_USER_DESC"),
     ...DEFAULT_TRAITS,
+    techLiteracy: "high",
   },
   "accessibility": {
     name: msg("PERSONA_ACCESSIBILITY"),
@@ -75,6 +79,7 @@ const PERSONA_PRESETS = {
     name: msg("PERSONA_NON_TECHNICAL"),
     description: msg("PERSONA_NON_TECHNICAL_DESC"),
     ...DEFAULT_TRAITS,
+    techLiteracy: "low",
   },
   "roaster": {
     name: msg("PERSONA_ROASTER"),
@@ -96,6 +101,8 @@ function normalizeTraits(p) {
   };
 }
 
+const TASK_HISTORY_MAX = 50;
+
 let isRunning = false;
 let isChatting = false;
 let chatAbortController = null;
@@ -105,6 +112,12 @@ let sessionHistory = [];
 let chatHistory = [];
 let currentPersona = null;
 let currentTask = "";
+let taskHistory = [];
+let historyIndex = null;
+let historyDraft = "";
+let currentModel = "";
+let sessionStartedAt = null;
+let sessionOutcome = null;
 
 const inputEl = document.getElementById("input");
 const sendBtn = document.getElementById("send");
@@ -135,10 +148,13 @@ const personaDeleteBtn = document.getElementById("persona-delete-btn");
 const stopBar = document.getElementById("stop-bar");
 const stopTestBtn = document.getElementById("stop-test-btn");
 const modelSelect = document.getElementById("model-select");
+const exportBtn = document.getElementById("export-btn");
 const personaSightedToggle = document.getElementById("persona-sighted-toggle");
 const personaColorBlindnessSelect = document.getElementById("persona-colorblindness-select");
 const personaKeyboardOnlyToggle = document.getElementById("persona-keyboard-only-toggle");
 const personaColorBlindnessItem = document.getElementById("persona-colorblindness-item");
+const personaAgeBandSelect = document.getElementById("persona-age-band-select");
+const personaTechLiteracySelect = document.getElementById("persona-tech-literacy-select");
 
 const selectSizer = document.createElement("span");
 selectSizer.style.cssText = "position:absolute;visibility:hidden;white-space:nowrap;";
@@ -180,6 +196,85 @@ async function loadPrefs() {
   return data.preferences || {};
 }
 
+/**
+ * Loads the stored task history into memory.
+ */
+async function loadTaskHistory() {
+  var data = await ChromeUtils.storageGet("taskHistory");
+  taskHistory = Array.isArray(data.taskHistory) ? data.taskHistory.slice() : [];
+}
+
+/**
+ * Appends a task to history (deduping the most recent entry) and persists.
+ * Also resets the history cursor so the next Up starts from the newest entry.
+ * @param {string} task
+ */
+function pushTaskHistory(task) {
+  if (!task) return;
+  if (taskHistory.length > 0 && taskHistory[taskHistory.length - 1] === task) {
+    // Dedupe consecutive duplicate
+  } else {
+    taskHistory.push(task);
+    if (taskHistory.length > TASK_HISTORY_MAX) {
+      taskHistory = taskHistory.slice(-TASK_HISTORY_MAX);
+    }
+    ChromeUtils.storageSet({ taskHistory: taskHistory });
+  }
+  historyIndex = null;
+  historyDraft = "";
+}
+
+/**
+ * Moves the caret to the end of the chat input.
+ */
+function moveInputCaretToEnd() {
+  var range = document.createRange();
+  range.selectNodeContents(inputEl);
+  range.collapse(false);
+  var sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(range);
+}
+
+/**
+ * Cycles to an older history entry. Stashes the current input as the draft on
+ * the first step out of the end position.
+ * @returns {boolean} True if the event should be consumed.
+ */
+function cycleHistoryUp() {
+  if (taskHistory.length === 0) return false;
+  if (historyIndex === null) {
+    historyDraft = inputEl.textContent || "";
+    historyIndex = taskHistory.length - 1;
+  } else if (historyIndex > 0) {
+    historyIndex--;
+  } else {
+    return true;
+  }
+  inputEl.textContent = taskHistory[historyIndex];
+  moveInputCaretToEnd();
+  updateSendButton();
+  return true;
+}
+
+/**
+ * Cycles to a newer history entry. Past the newest entry restores the stashed draft.
+ * @returns {boolean} True if the event should be consumed.
+ */
+function cycleHistoryDown() {
+  if (historyIndex === null) return false;
+  if (historyIndex < taskHistory.length - 1) {
+    historyIndex++;
+    inputEl.textContent = taskHistory[historyIndex];
+  } else {
+    historyIndex = null;
+    inputEl.textContent = historyDraft;
+  }
+  moveInputCaretToEnd();
+  updateSendButton();
+  return true;
+}
+
 modelSelect.addEventListener("change", function () {
   resizeSelect(modelSelect);
   savePref("model", modelSelect.value);
@@ -187,6 +282,8 @@ modelSelect.addEventListener("change", function () {
 
 personaSightedToggle.addEventListener("change", syncSightedDependents);
 personaColorBlindnessSelect.addEventListener("change", function () { resizeSelect(personaColorBlindnessSelect); });
+personaAgeBandSelect.addEventListener("change", function () { resizeSelect(personaAgeBandSelect); });
+personaTechLiteracySelect.addEventListener("change", function () { resizeSelect(personaTechLiteracySelect); });
 
 /**
  * Toggles the is-disabled style on the color-blindness and low-vision rows
@@ -319,9 +416,14 @@ function openPersonaDialog(persona) {
   personaSightedToggle.checked = !!traits.sighted;
   personaColorBlindnessSelect.value = traits.colorBlindness;
   personaKeyboardOnlyToggle.checked = !!traits.keyboardOnly;
+  personaAgeBandSelect.value = traits.ageBand;
+  personaTechLiteracySelect.value = traits.techLiteracy;
   syncSightedDependents();
+  updatePersonaSaveButton();
   personaDialog.hidden = false;
   resizeSelect(personaColorBlindnessSelect);
+  resizeSelect(personaAgeBandSelect);
+  resizeSelect(personaTechLiteracySelect);
   personaNameInput.focus();
 }
 
@@ -345,6 +447,8 @@ async function handlePersonaSave() {
     sighted: personaSightedToggle.checked,
     colorBlindness: personaColorBlindnessSelect.value,
     keyboardOnly: personaKeyboardOnlyToggle.checked,
+    ageBand: personaAgeBandSelect.value,
+    techLiteracy: personaTechLiteracySelect.value,
   };
 
   if (editingPersonaId) {
@@ -399,6 +503,19 @@ function getSelectedPersona() {
   return normalizeTraits(PERSONA_PRESETS[val] || PERSONA_PRESETS["first-time"]);
 }
 
+/**
+ * Enables the persona save button only when both required fields (name, description)
+ * have non-whitespace content.
+ */
+function updatePersonaSaveButton() {
+  var hasName = personaNameInput.value.trim().length > 0;
+  var hasDesc = personaDescInput.value.trim().length > 0;
+  personaSaveBtn.disabled = !(hasName && hasDesc);
+}
+
+personaNameInput.addEventListener("input", updatePersonaSaveButton);
+personaDescInput.addEventListener("input", updatePersonaSaveButton);
+
 addPersonaBtn.addEventListener("click", function () { openPersonaDialog(); });
 personaSaveBtn.addEventListener("click", handlePersonaSave);
 personaCancelBtn.addEventListener("click", closePersonaDialog);
@@ -416,6 +533,7 @@ async function init() {
   initI18n();
 
   await loadCustomPersonas();
+  await loadTaskHistory();
   rebuildPersonaSelect();
   renderPersonaList();
 
@@ -532,6 +650,18 @@ inputEl.addEventListener("keydown", function (e) {
   if (e.key === "Enter" && !e.shiftKey) {
     e.preventDefault();
     handleSend();
+    return;
+  }
+
+  if (isRunning || hasSession) return;
+
+  if (e.key === "ArrowUp") {
+    if (cycleHistoryUp()) e.preventDefault();
+    return;
+  }
+  if (e.key === "ArrowDown") {
+    if (cycleHistoryDown()) e.preventDefault();
+    return;
   }
 });
 
@@ -564,6 +694,16 @@ function updateSendButton() {
   sendBtn.disabled = !hasText;
 }
 
+/**
+ * Updates the export button visibility and disabled state. Hidden until a session
+ * has produced at least one step; disabled while a test is actively running so the
+ * user can see the button but can't export mid-run.
+ */
+function updateExportButton() {
+  exportBtn.hidden = !hasSession;
+  exportBtn.disabled = isRunning;
+}
+
 inputEl.addEventListener("input", updateSendButton);
 
 /**
@@ -573,6 +713,164 @@ newTestBtn.addEventListener("click", function () {
   if (isRunning) return;
   resetChat();
 });
+
+exportBtn.addEventListener("click", exportSession);
+
+/**
+ * Escapes a string for safe insertion into HTML text content / attributes.
+ * @param {string} s
+ * @returns {string}
+ */
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+/**
+ * Groups session history into runs keyed by the originating task. A follow-up
+ * task marker closes the current run and starts a new one.
+ * @returns {Array<{task: string, steps: Array<Object>}>}
+ */
+function buildRuns() {
+  var runs = [];
+  var current = { task: currentTask, steps: [] };
+  for (var entry of sessionHistory) {
+    if (entry.followUpTask) {
+      runs.push(current);
+      current = { task: entry.followUpTask, steps: [] };
+      continue;
+    }
+    current.steps.push({
+      stepNumber: entry.stepNumber,
+      url: entry.url || null,
+      action: entry.action,
+      reasoning: entry.reasoning || "",
+      success: entry.success !== false,
+      error: entry.error || null,
+    });
+  }
+  runs.push(current);
+  return runs;
+}
+
+/**
+ * Builds the structured session data object for session.json.
+ * @returns {Object}
+ */
+function buildSessionData() {
+  return {
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    startedAt: sessionStartedAt,
+    task: currentTask,
+    persona: currentPersona,
+    model: currentModel,
+    outcome: sessionOutcome || { status: "incomplete" },
+    stepCount: stepCount,
+    runs: buildRuns(),
+    chat: chatHistory.slice(),
+  };
+}
+
+/**
+ * Renders the HTML header block shown above the chat content in the exported report.
+ * @returns {string}
+ */
+function buildReportHeader() {
+  var p = currentPersona || {};
+  var traits = [];
+  if (p.sighted === false) traits.push("Not sighted");
+  if (p.colorBlindness && p.colorBlindness !== "none") traits.push("Color blindness: " + p.colorBlindness);
+  if (p.keyboardOnly) traits.push("Keyboard only");
+  var traitHtml = traits.map(function (t) { return `<span class="trait">${escapeHtml(t)}</span>`; }).join("");
+
+  var outcome = sessionOutcome || { status: "incomplete" };
+  var outcomeLabel = outcome.status === "completed"
+    ? "Completed"
+    : outcome.status === "error"
+      ? "Stopped — " + (outcome.message || "unknown")
+      : "Incomplete";
+
+  var startedLabel = sessionStartedAt ? new Date(sessionStartedAt).toLocaleString() : "—";
+
+  return `<header class="report-meta">
+  <h1>Roast Me — Session Report</h1>
+  <dl>
+    <dt>Task</dt><dd>${escapeHtml(currentTask || "—")}</dd>
+    <dt>Persona</dt><dd><strong>${escapeHtml(p.name || "—")}</strong><div class="persona-desc">${escapeHtml(p.description || "")}</div>${traitHtml ? `<div class="traits">${traitHtml}</div>` : ""}</dd>
+    <dt>Model</dt><dd>${escapeHtml(currentModel || "—")}</dd>
+    <dt>Started</dt><dd>${escapeHtml(startedLabel)}</dd>
+    <dt>Steps</dt><dd>${stepCount}</dd>
+    <dt>Outcome</dt><dd>${escapeHtml(outcomeLabel)}</dd>
+  </dl>
+</header>`;
+}
+
+/**
+ * Builds the full standalone HTML report as a string.
+ * @param {string} css - The bundled stylesheet to inline.
+ * @returns {string}
+ */
+function buildReportHtml(css) {
+  var title = escapeHtml(currentTask || "Roast Me session");
+  var header = buildReportHeader();
+  var body = messagesEl.outerHTML;
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>${title}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&family=Noto+Color+Emoji&display=swap" rel="stylesheet">
+<style>${css}</style>
+<style>
+body { background: var(--background); color: var(--on-surface); font-family: 'DM Sans', 'Noto Color Emoji', sans-serif; margin: 0; padding: 24px; }
+.messages { display: flex; padding: 0; overflow: visible; max-width: 720px; margin: 0 auto; }
+.report-meta { max-width: 720px; margin: 0 auto 24px; padding-bottom: 20px; border-bottom: 1px solid var(--outline-variant); }
+.report-meta h1 { font-size: 18px; font-weight: 600; margin: 0 0 16px; color: var(--on-surface); }
+.report-meta dl { display: grid; grid-template-columns: 96px 1fr; gap: 10px 16px; margin: 0; font-size: 14px; align-items: baseline; }
+.report-meta dt { color: var(--on-surface-variant); font-weight: 400; }
+.report-meta dd { margin: 0; color: var(--on-surface); }
+.report-meta .persona-desc { color: var(--on-surface-variant); font-size: 13px; line-height: 1.5; margin-top: 2px; }
+.report-meta .traits { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px; }
+.report-meta .trait { font-size: 12px; padding: 2px 8px; border-radius: 10px; background: var(--surface-container); color: var(--on-surface-variant); }
+</style>
+</head>
+<body>${header}${body}</body>
+</html>`;
+}
+
+/**
+ * Downloads the current session as a zip containing report.html + session.json.
+ */
+async function exportSession() {
+  var cssUrl = chrome.runtime.getURL("sidePanel/styles.css");
+  var css = await (await fetch(cssUrl)).text();
+
+  var html = buildReportHtml(css);
+  var json = JSON.stringify(buildSessionData(), null, 2);
+
+  var zip = new JSZip();
+  zip.file("report.html", html);
+  zip.file("session.json", json);
+  var blob = await zip.generateAsync({ type: "blob" });
+
+  var url = URL.createObjectURL(blob);
+  var stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  var a = document.createElement("a");
+  a.href = url;
+  a.download = `roast-me-session-${stamp}.zip`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
 
 /**
  * Resets all state and UI to the initial idle configuration.
@@ -586,6 +884,11 @@ function resetChat() {
   chatHistory = [];
   currentPersona = null;
   currentTask = "";
+  currentModel = "";
+  sessionStartedAt = null;
+  sessionOutcome = null;
+  historyIndex = null;
+  historyDraft = "";
   messagesEl.innerHTML = "";
   messagesEl.classList.remove("visible");
   mainTop.classList.remove("hidden");
@@ -593,6 +896,7 @@ function resetChat() {
   stopBar.hidden = true;
   inputArea.hidden = true;
   newTestBtn.hidden = true;
+  updateExportButton();
   sendBtn.classList.remove("stop");
   modelSelect.disabled = false;
   inputEl.setAttribute("contenteditable", "plaintext-only");
@@ -622,6 +926,7 @@ function showStopBar() {
   sendBtn.disabled = false;
   modelSelect.disabled = true;
   newTestBtn.hidden = true;
+  updateExportButton();
 }
 
 /**
@@ -683,6 +988,8 @@ function hideTypingIndicator() {
  * @param {string} task - The freeform task description.
  */
 async function startTest(task) {
+  pushTaskHistory(task);
+
   isRunning = true;
   hasSession = false;
   stepCount = 0;
@@ -690,6 +997,9 @@ async function startTest(task) {
   chatHistory = [];
   currentPersona = getSelectedPersona();
   currentTask = task;
+  currentModel = modelSelect.value;
+  sessionStartedAt = new Date().toISOString();
+  sessionOutcome = null;
 
   switchToChatLayout();
   showStopBar();
@@ -719,6 +1029,7 @@ async function startTest(task) {
 function onTestComplete() {
   isRunning = false;
   hasSession = true;
+  sessionOutcome = { status: "completed" };
   hideTypingIndicator();
 
   addMessage(msg("TEST_COMPLETED", [String(stepCount)]), "status");
@@ -726,6 +1037,7 @@ function onTestComplete() {
   showChatInput();
   inputEl.setAttribute("data-placeholder", msg("CHAT_PLACEHOLDER"));
   newTestBtn.hidden = false;
+  updateExportButton();
   updateSendButton();
   inputEl.focus();
 }
@@ -736,6 +1048,7 @@ function onTestComplete() {
  */
 function onTestError(error) {
   isRunning = false;
+  sessionOutcome = { status: "error", message: error };
   hideTypingIndicator();
 
   if (stepCount > 0) {
@@ -748,6 +1061,7 @@ function onTestError(error) {
     addMessage(msg("TEST_ERROR", [error]), "status msg-error");
     showChatInput();
   }
+  updateExportButton();
   updateSendButton();
 }
 
@@ -770,7 +1084,7 @@ function onStepUpdate(step) {
     appendStepScreenshot(aiEl, step.cleanScreenshot, step.gesture);
   }
 
-  if (!step.success) {
+  if (!step.success && step.action.type !== "blocked") {
     addMessage(msg("ACTION_FAILED", [step.action.type]), "status msg-error");
   }
 

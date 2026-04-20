@@ -51,6 +51,12 @@ function handleStartTest(msg, sendResponse) {
         throw new Error("No active tab found");
       }
 
+      const tab = tabs[0];
+      const url = tab.url || tab.pendingUrl || "";
+      if (!/^https?:\/\//i.test(url)) {
+        throw new Error(`Tests can only run on regular web pages (http / https). The current tab is ${url ? url : "a browser or extension page"}. Switch to a website tab and try again.`);
+      }
+
       return ChromeUtils.storageGet("claudeApiKey").then(function (data) {
         if (!data.claudeApiKey) {
           throw new Error("Claude API key not configured");
@@ -61,7 +67,7 @@ function handleStartTest(msg, sendResponse) {
         agentService
           .runTest(
             {
-              tabId: tabs[0].id,
+              tabId: tab.id,
               persona: msg.persona,
               task: msg.task,
               productContext: msg.productContext || "",
