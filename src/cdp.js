@@ -9,6 +9,10 @@ const CDP_VERSION = "1.3";
 let elementMap = {};
 
 let currentDPR = 1;
+let currentViewportWidth = 0;
+let currentViewportHeight = 0;
+let currentLLMImageWidth = 0;
+let currentLLMImageHeight = 0;
 
 let offscreenCounts = { above: 0, below: 0 };
 
@@ -233,10 +237,28 @@ async function fetchDevicePixelRatio(tabId) {
  * @returns {{x: number, y: number}} Scaled coordinates in CSS pixels.
  */
 export function scaleCoordinatesFromScreenshot(x, y) {
+  if (currentLLMImageWidth > 0 && currentLLMImageHeight > 0
+    && currentViewportWidth > 0 && currentViewportHeight > 0) {
+    return {
+      x: Math.round((x / currentLLMImageWidth) * currentViewportWidth),
+      y: Math.round((y / currentLLMImageHeight) * currentViewportHeight),
+    };
+  }
   return {
     x: Math.round(x / currentDPR),
     y: Math.round(y / currentDPR),
   };
+}
+
+/**
+ * Records the pixel dimensions of the image actually sent to the LLM so that
+ * coordinate-based actions from the agent can be scaled back to CSS pixels.
+ * @param {number} width
+ * @param {number} height
+ */
+export function setLLMImageSize(width, height) {
+  currentLLMImageWidth = width || 0;
+  currentLLMImageHeight = height || 0;
 }
 
 const INTERACTIVE_TAGS = new Set([
@@ -1220,6 +1242,8 @@ export async function capturePageState(tabId, visionFilter) {
   const elMap = await buildElementMap(tabId);
   const metadata = await getPageMetadata(tabId);
   const viewport = await readViewportSize(tabId);
+  currentViewportWidth = viewport.width;
+  currentViewportHeight = viewport.height;
 
   const cleanScreenshot = await captureScreenshot(tabId);
   if (visionFilter && (visionFilter.css || visionFilter.svg)) {

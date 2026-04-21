@@ -1079,9 +1079,10 @@ function onStepUpdate(step) {
     aiEl = addMessage(step.reasoning, "ai");
   }
 
-  if (step.cleanScreenshot) {
+  var shotData = step.screenshot || step.cleanScreenshot;
+  if (shotData) {
     if (!aiEl) aiEl = addMessage("", "ai");
-    appendStepScreenshot(aiEl, step.cleanScreenshot, step.gesture);
+    appendStepScreenshot(aiEl, shotData, step.gesture);
   }
 
   if (!step.success && step.action.type !== "blocked") {

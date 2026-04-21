@@ -26,5 +26,5 @@ export async function resizeBase64Image(base64, sourceMime, maxWidth, quality) {
   const outBuffer = new Uint8Array(await outBlob.arrayBuffer());
   let binary = "";
   for (let i = 0; i < outBuffer.length; i++) binary += String.fromCharCode(outBuffer[i]);
-  return { data: btoa(binary), mediaType: "image/jpeg" };
+  return { data: btoa(binary), mediaType: "image/jpeg", width: w, height: h };
 }

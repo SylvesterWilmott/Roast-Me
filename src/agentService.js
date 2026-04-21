@@ -28,6 +28,7 @@ import {
   getPageMetadata,
   setApprovedOrigin,
   consumeBlockedNavigations,
+  setLLMImageSize,
 } from "./cdp.js";
 import {
   buildSystemPrompt,
@@ -123,7 +124,8 @@ function buildGesture(action, dpr) {
       }
     }
     if (typeof action.x === "number" && typeof action.y === "number") {
-      return { x: Math.round(action.x), y: Math.round(action.y) };
+      const css = scaleCoordinatesFromScreenshot(action.x, action.y);
+      return toShotCoords(css.x, css.y);
     }
     return null;
   };
@@ -157,12 +159,14 @@ function buildGesture(action, dpr) {
     }
     if (!from) return null;
     if (typeof action.x !== "number" || typeof action.y !== "number") return null;
+    const toCss = scaleCoordinatesFromScreenshot(action.x, action.y);
+    const toShot = toShotCoords(toCss.x, toCss.y);
     return {
       type: "drag",
       fromX: from.x,
       fromY: from.y,
-      toX: Math.round(action.x),
-      toY: Math.round(action.y),
+      toX: toShot.x,
+      toY: toShot.y,
     };
   }
 
@@ -397,8 +401,17 @@ export default class AgentService {
           llmImage = await resizeBase64Image(pageState.screenshot, "image/png", LLM_SCREENSHOT_MAX_WIDTH, LLM_SCREENSHOT_QUALITY);
         } catch (err) {
           console.warn("[Agent] Screenshot resize failed, sending original:", err.message);
-          llmImage = { data: pageState.screenshot, mediaType: "image/png" };
+          const fallbackDpr = pageState.devicePixelRatio || 1;
+          llmImage = {
+            data: pageState.screenshot,
+            mediaType: "image/png",
+            width: Math.round((pageState.viewportWidth || 0) * fallbackDpr),
+            height: Math.round((pageState.viewportHeight || 0) * fallbackDpr),
+          };
         }
+        setLLMImageSize(llmImage.width, llmImage.height);
+      } else {
+        setLLMImageSize(0, 0);
       }
       const userParts = sighted
         ? [

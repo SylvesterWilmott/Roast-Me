@@ -69,8 +69,7 @@ function handleStartTest(msg, sendResponse) {
               model: msg.model,
             },
             function (step) {
-              const { screenshot: _annotatedScreenshot, ...stepData } = step;
-              sendToSidePanel({ type: "STEP_UPDATE", step: stepData });
+              sendToSidePanel({ type: "STEP_UPDATE", step: step });
             },
           )
           .then(function () {
