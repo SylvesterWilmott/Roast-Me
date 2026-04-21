@@ -1243,7 +1243,8 @@ export async function removeAnnotations(tabId) {
  * @param {string} [visionFilter.svg] - Optional SVG markup injected so filter URLs can resolve.
  * @returns {Promise<{screenshot: string, cleanScreenshot: string, interactiveElements: string, metadata: Object, scrollHint: string, elementCount: number, devicePixelRatio: number}>} The complete page state.
  */
-export async function capturePageState(tabId, visionFilter) {
+export async function capturePageState(tabId, visionFilter, options) {
+  const minimalElements = !!(options && options.minimalElements);
   const elMap = await buildElementMap(tabId);
   const metadata = await getPageMetadata(tabId);
   const viewport = await readViewportSize(tabId);
@@ -1261,7 +1262,7 @@ export async function capturePageState(tabId, visionFilter) {
     await removeVisionFilter(tabId);
   }
 
-  const interactiveElements = formatElementMapForLLM(elMap);
+  const interactiveElements = formatElementMapForLLM(elMap, { minimal: minimalElements });
 
   let scrollHint = "";
   if (offscreenCounts.above > 0 || offscreenCounts.below > 0) {
@@ -1328,7 +1329,8 @@ const INPUT_TYPE_HINTS = {
  * @param {Object} map - The element map keyed by index.
  * @returns {string} Formatted element list or a message if no elements are found.
  */
-export function formatElementMapForLLM(map) {
+export function formatElementMapForLLM(map, options) {
+  const minimal = !!(options && options.minimal);
   const lines = [];
   let totalChars = 0;
   let currentGroup = null;
@@ -1336,7 +1338,7 @@ export function formatElementMapForLLM(map) {
   for (const idx in map) {
     const el = map[idx];
 
-    const group = el.structuralContext || null;
+    const group = minimal ? null : (el.structuralContext || null);
     if (group !== currentGroup) {
       currentGroup = group;
       if (group) {
@@ -1347,10 +1349,10 @@ export function formatElementMapForLLM(map) {
     }
 
     const indent = group ? "  " : "";
-    let line = `${indent}[${idx}] ${el.role}`;
+    let line = minimal ? `${indent}[${idx}]` : `${indent}[${idx}] ${el.role}`;
     if (el.tag) line += ` <${el.tag}>`;
-    if (el.name) line += ` "${el.name}"`;
-    if (el.description) line += ` (${el.description})`;
+    if (!minimal && el.name) line += ` "${el.name}"`;
+    if (!minimal && el.description) line += ` (${el.description})`;
 
     if (el.inputType && el.inputType !== "text" && el.inputType !== "submit" && el.inputType !== "button") {
       const hint = INPUT_TYPE_HINTS[el.inputType];
@@ -1375,21 +1377,26 @@ export function formatElementMapForLLM(map) {
       }
     }
 
-    if (el.textContent && !el.name && el.tag !== "input" && el.tag !== "textarea" && el.tag !== "select") {
+    const showText = el.textContent
+      && (minimal || !el.name)
+      && el.tag !== "input" && el.tag !== "textarea" && el.tag !== "select";
+    if (showText) {
       const truncated = el.textContent.length > 60
         ? el.textContent.substring(0, 60) + "..."
         : el.textContent;
       line += ` "${truncated}"`;
     }
 
-    const propParts = [];
-    if (el.props.disabled) propParts.push("disabled");
-    if (el.props.checked !== undefined) propParts.push(`checked:${el.props.checked}`);
-    if (el.props.expanded !== undefined) propParts.push(`expanded:${el.props.expanded}`);
-    if (el.props.selected) propParts.push("selected");
-    if (el.props.required) propParts.push("required");
-    if (el.props.readonly) propParts.push("readonly");
-    if (propParts.length > 0) line += ` [${propParts.join(", ")}]`;
+    if (!minimal) {
+      const propParts = [];
+      if (el.props.disabled) propParts.push("disabled");
+      if (el.props.checked !== undefined) propParts.push(`checked:${el.props.checked}`);
+      if (el.props.expanded !== undefined) propParts.push(`expanded:${el.props.expanded}`);
+      if (el.props.selected) propParts.push("selected");
+      if (el.props.required) propParts.push("required");
+      if (el.props.readonly) propParts.push("readonly");
+      if (propParts.length > 0) line += ` [${propParts.join(", ")}]`;
+    }
 
     totalChars += line.length + 1;
     if (totalChars > FORMAT_CHAR_LIMIT) {

@@ -155,6 +155,7 @@ const personaKeyboardOnlyToggle = document.getElementById("persona-keyboard-only
 const personaColorBlindnessItem = document.getElementById("persona-colorblindness-item");
 const personaAgeBandSelect = document.getElementById("persona-age-band-select");
 const personaTechLiteracySelect = document.getElementById("persona-tech-literacy-select");
+const sightedA11yToggle = document.getElementById("sighted-a11y-toggle");
 
 const selectSizer = document.createElement("span");
 selectSizer.style.cssText = "position:absolute;visibility:hidden;white-space:nowrap;";
@@ -278,6 +279,10 @@ function cycleHistoryDown() {
 modelSelect.addEventListener("change", function () {
   resizeSelect(modelSelect);
   savePref("model", modelSelect.value);
+});
+
+sightedA11yToggle.addEventListener("change", function () {
+  savePref("sightedA11y", sightedA11yToggle.checked);
 });
 
 personaSightedToggle.addEventListener("change", syncSightedDependents);
@@ -544,6 +549,9 @@ async function init() {
   resizeSelect(modelSelect);
   if (prefs.persona && personaSelect.querySelector('option[value="' + prefs.persona + '"]')) {
     personaSelect.value = prefs.persona;
+  }
+  if (typeof prefs.sightedA11y === "boolean") {
+    sightedA11yToggle.checked = prefs.sightedA11y;
   }
   syncPersonaLabel();
 
@@ -1014,6 +1022,7 @@ async function startTest(task) {
       task: task,
       productContext: "",
       model: modelSelect.value,
+      sightedA11y: sightedA11yToggle.checked,
     });
     if (response.error) {
       onTestError(response.error);
@@ -1332,6 +1341,7 @@ async function launchFollowUpTest(task) {
       task: task,
       productContext: "",
       model: modelSelect.value,
+      sightedA11y: sightedA11yToggle.checked,
     });
     if (response.error) {
       onTestError(response.error);

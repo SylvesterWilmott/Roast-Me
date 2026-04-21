@@ -67,6 +67,7 @@ function handleStartTest(msg, sendResponse) {
               productContext: msg.productContext || "",
               apiKey: data.claudeApiKey,
               model: msg.model,
+              sightedA11y: msg.sightedA11y !== false,
             },
             function (step) {
               const { screenshot: _annotatedScreenshot, ...stepData } = step;

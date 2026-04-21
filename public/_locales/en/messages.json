@@ -105,6 +105,15 @@
   "TRAIT_CB_ACHROMATOPSIA": {
     "message": "Achromatopsia (no color)"
   },
+  "AGENT_BEHAVIOR_TITLE": {
+    "message": "Agent behavior"
+  },
+  "SIGHTED_A11Y_LABEL": {
+    "message": "Sighted accessibility tree"
+  },
+  "SIGHTED_A11Y_HELP": {
+    "message": "Let sighted personas read element roles and ARIA names alongside the screenshot."
+  },
   "CUSTOM_PERSONAS_TITLE": {
     "message": "Custom Personas"
   },

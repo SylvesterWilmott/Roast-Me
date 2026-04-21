@@ -291,7 +291,7 @@ export default class AgentService {
    * @param {Function} [onStepCallback] - Called after each step with the step record.
    */
   async runTest(config, onStepCallback) {
-    const { tabId, persona, task, productContext, apiKey, model } = config;
+    const { tabId, persona, task, productContext, apiKey, model, sightedA11y } = config;
 
     this.tabId = tabId;
     this.persona = persona;
@@ -300,6 +300,7 @@ export default class AgentService {
     this.sessionHistory = [];
     this.isRunning = true;
     this.visionFilter = buildVisionFilter(persona);
+    this.sightedA11y = sightedA11y !== false;
     this.claude = new ClaudeClient(apiKey, model);
     this.systemPrompt = buildSystemPrompt(persona, productContext);
     this.loopDetector = new ActionLoopDetector();
@@ -349,7 +350,9 @@ export default class AgentService {
 
       let pageState;
       try {
-        pageState = await capturePageState(this.tabId, this.visionFilter);
+        const sighted = this.persona && this.persona.sighted !== false;
+        const minimalElements = sighted && !this.sightedA11y;
+        pageState = await capturePageState(this.tabId, this.visionFilter, { minimalElements });
       } catch (err) {
         throw new Error(`Failed to capture page state: ${err.message}`);
       }
