@@ -35,7 +35,7 @@ npm install
 npm run build
 ```
 
-Output is written to `dist/`. A zipped copy of the extension is also written to `dist/roast-me-1.0.0.zip`.
+Output is written to `dist/`. A zipped copy of the extension is also written to `dist/roast-me-1.1.0.zip`.
 
 For development, run a watcher that rebuilds on change:
 
