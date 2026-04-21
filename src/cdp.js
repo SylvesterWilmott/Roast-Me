@@ -903,6 +903,11 @@ async function captureDOMHeuristics(tabId) {
           if (el.nodeType !== 1) return;
 
           const tag = el.tagName.toLowerCase();
+          // Icon/SVG tags are purely decorative. They routinely inherit
+          // cursor: pointer from an interactive ancestor (a button / link)
+          // and get double-counted, which also trips the occlusion check for
+          // the real button behind them.
+          if (tag === 'i' || tag === 'svg') return;
           const rect = el.getBoundingClientRect();
           if (rect.width === 0 && rect.height === 0) return;
 

@@ -431,9 +431,7 @@ export default class AgentService {
 
       let response;
       try {
-        console.log("[Agent] Step", stepNumber, "- calling LLM for", pageState.metadata.url);
         response = await this._callLLMWithRetry(userParts);
-        console.log("[Agent] Step", stepNumber, "- LLM response actions:", JSON.stringify(this._normalizeActions(response)));
       } catch (err) {
         if (err.name === "AbortError" || !this.isRunning) {
           break;
@@ -513,7 +511,6 @@ export default class AgentService {
         }
 
         try {
-          console.log("[Agent] Executing action:", JSON.stringify(action));
           await this._executeAction(action);
           if (!this.isRunning) {
             shouldBreak = true;

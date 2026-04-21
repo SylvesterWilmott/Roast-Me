@@ -191,8 +191,6 @@ export default class ClaudeClient {
    * @throws {Error} On HTTP errors, empty responses, or missing text content.
    */
   async _request(body, signal) {
-    console.log("[Claude] Sending request to", API_BASE, "model:", body.model);
-
     const response = await fetch(API_BASE, {
       method: "POST",
       headers: {
@@ -218,7 +216,6 @@ export default class ClaudeClient {
     }
 
     const data = await response.json();
-    console.log("[Claude] Response:", JSON.stringify(data).substring(0, 500));
 
     if (data.type === "error") {
       throw new Error(chrome.i18n.getMessage("CLAUDE_ERROR", [data.error?.message || "Unknown error"]));
@@ -233,7 +230,6 @@ export default class ClaudeClient {
       throw new Error(chrome.i18n.getMessage("NO_TEXT_CONTENT_ERROR"));
     }
 
-    console.log("[Claude] Text response:", textBlock.text.substring(0, 300));
     return textBlock.text;
   }
 }
