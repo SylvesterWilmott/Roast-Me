@@ -1547,6 +1547,27 @@ for (let i = 0; i <= 9; i++) {
 async function typeCharByChar(tabId, text) {
   for (let i = 0; i < text.length; i++) {
     const char = text[i];
+
+    if (char === "\n" || char === "\r") {
+      if (char === "\r" && text[i + 1] === "\n") i++;
+      await sendCommand(tabId, "Input.dispatchKeyEvent", {
+        type: "keyDown",
+        key: "Enter",
+        code: "Enter",
+        windowsVirtualKeyCode: 13,
+        text: "\r",
+        unmodifiedText: "\r",
+      });
+      await sendCommand(tabId, "Input.dispatchKeyEvent", {
+        type: "keyUp",
+        key: "Enter",
+        code: "Enter",
+        windowsVirtualKeyCode: 13,
+      });
+      if (i < text.length - 1) await sleep(2);
+      continue;
+    }
+
     const mapping = CHAR_KEY_MAP[char];
     const code = mapping?.code ?? "";
     const vkCode = mapping?.windowsVirtualKeyCode ?? 0;
