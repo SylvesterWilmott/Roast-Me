@@ -70,8 +70,7 @@ function handleStartTest(msg, sendResponse) {
               sightedA11y: msg.sightedA11y !== false,
             },
             function (step) {
-              const { screenshot: _annotatedScreenshot, ...stepData } = step;
-              sendToSidePanel({ type: "STEP_UPDATE", step: stepData });
+              sendToSidePanel({ type: "STEP_UPDATE", step });
             },
           )
           .then(function () {

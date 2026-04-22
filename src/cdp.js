@@ -1096,154 +1096,25 @@ async function captureDOMHeuristics(tabId) {
   }
 }
 
-const TAG_COLORS = {
+export const TAG_COLORS = {
   button: "#FF6B6B",
   input: "#4ECDC4",
   select: "#45B7D1",
   a: "#96CEB4",
   textarea: "#FF8C42",
 };
-const DEFAULT_COLOR = "#9B59B6";
+export const DEFAULT_COLOR = "#9B59B6";
 
 /**
- * Injects temporary visual annotations (colored bounding boxes and index labels) onto page elements.
- * @param {number} tabId - The ID of the tab to annotate.
- * @param {Object} map - The element map with index keys and bounding box data.
- * @returns {Promise<void>}
- */
-export async function annotateElements(tabId, map) {
-  const elements = Object.values(map);
-  if (elements.length === 0) return;
-
-  const annotations = elements.map(function (el) {
-    const bb = el.boundingBox;
-    const left = bb.x - bb.width / 2;
-    const top = bb.y - bb.height / 2;
-    return {
-      index: el.index,
-      left: Math.max(0, Math.round(left)),
-      top: Math.max(0, Math.round(top)),
-      width: Math.round(bb.width),
-      height: Math.round(bb.height),
-      color: TAG_COLORS[el.tag] || DEFAULT_COLOR,
-    };
-  });
-
-  const annotationJSON = JSON.stringify(annotations);
-
-  await sendCommand(tabId, "Runtime.evaluate", {
-    expression: `(() => {
-      const existing = document.getElementById('__ux_test_overlay__');
-      if (existing) existing.remove();
-
-      const container = document.createElement('div');
-      container.id = '__ux_test_overlay__';
-      container.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:2147483647;';
-
-      const annotations = ${annotationJSON};
-
-      for (const a of annotations) {
-        const box = document.createElement('div');
-        box.style.cssText = 'position:absolute;pointer-events:none;'
-          + 'border:2px dashed ' + a.color + ';'
-          + 'left:' + a.left + 'px;top:' + a.top + 'px;'
-          + 'width:' + a.width + 'px;height:' + a.height + 'px;';
-
-        const label = document.createElement('span');
-        label.textContent = a.index;
-        const labelPos = a.height < 20 ? 'top:-14px;left:50%;transform:translateX(-50%);' : 'top:2px;left:2px;';
-        label.style.cssText = 'position:absolute;' + labelPos
-          + 'background:' + a.color + ';color:#fff;font:bold 10px/1 monospace;'
-          + 'padding:1px 4px;border-radius:2px;pointer-events:none;white-space:nowrap;';
-
-        box.appendChild(label);
-        container.appendChild(box);
-      }
-
-      document.documentElement.appendChild(container);
-    })()`,
-    returnByValue: true,
-  });
-}
-
-/**
- * Injects a CSS filter on the documentElement and optional SVG filter defs,
- * used to simulate color-blindness / low-vision for the annotated screenshot only.
- * @param {number} tabId - The tab ID.
- * @param {{css?: string, svg?: string}} filter - The filter config.
- * @returns {Promise<void>}
- */
-export async function applyVisionFilter(tabId, filter) {
-  const css = filter && filter.css ? String(filter.css) : "";
-  const svg = filter && filter.svg ? String(filter.svg) : "";
-  const expression = `(() => {
-    const existing = document.getElementById('__ux_vision_filter__');
-    if (existing) existing.remove();
-    const existingSvg = document.getElementById('__ux_vision_svg__');
-    if (existingSvg) existingSvg.remove();
-
-    if (${JSON.stringify(svg)}) {
-      const svgWrap = document.createElement('div');
-      svgWrap.id = '__ux_vision_svg__';
-      svgWrap.style.cssText = 'position:fixed;width:0;height:0;overflow:hidden;pointer-events:none;';
-      svgWrap.innerHTML = ${JSON.stringify(svg)};
-      document.documentElement.appendChild(svgWrap);
-    }
-
-    if (${JSON.stringify(css)}) {
-      const style = document.createElement('style');
-      style.id = '__ux_vision_filter__';
-      style.textContent = 'html{filter:' + ${JSON.stringify(css)} + ' !important;}';
-      document.documentElement.appendChild(style);
-    }
-  })()`;
-  await sendCommand(tabId, "Runtime.evaluate", {
-    expression,
-    returnByValue: true,
-  });
-}
-
-/**
- * Removes any vision-sim filter injected by applyVisionFilter.
- * @param {number} tabId - The tab ID.
- * @returns {Promise<void>}
- */
-export async function removeVisionFilter(tabId) {
-  await sendCommand(tabId, "Runtime.evaluate", {
-    expression: `(() => {
-      const style = document.getElementById('__ux_vision_filter__');
-      if (style) style.remove();
-      const svg = document.getElementById('__ux_vision_svg__');
-      if (svg) svg.remove();
-    })()`,
-    returnByValue: true,
-  });
-}
-
-/**
- * Removes all annotation overlays previously injected by annotateElements.
- * @param {number} tabId - The ID of the tab to clean up.
- * @returns {Promise<void>}
- */
-export async function removeAnnotations(tabId) {
-  await sendCommand(tabId, "Runtime.evaluate", {
-    expression: `(() => {
-      const el = document.getElementById('__ux_test_overlay__');
-      if (el) el.remove();
-    })()`,
-    returnByValue: true,
-  });
-}
-
-/**
- * Captures the full page state including element map, annotated screenshot, metadata, and scroll hints.
+ * Captures the full page state: a clean screenshot plus all data the caller
+ * needs to render annotations and color-blindness transforms offscreen. The
+ * live tab is never mutated.
  * @param {number} tabId - The ID of the tab to capture.
- * @param {Object} [visionFilter] - Optional vision-sim filter applied only around the annotated screenshot.
- * @param {string} [visionFilter.css] - The CSS filter string applied to the <html> element.
- * @param {string} [visionFilter.svg] - Optional SVG markup injected so filter URLs can resolve.
- * @returns {Promise<{screenshot: string, cleanScreenshot: string, interactiveElements: string, metadata: Object, scrollHint: string, elementCount: number, devicePixelRatio: number}>} The complete page state.
+ * @param {Object} [options]
+ * @param {boolean} [options.minimalElements] - If true, emit a shorter LLM element listing.
+ * @returns {Promise<{cleanScreenshot: string, elementsForAnnotation: Array, interactiveElements: string, metadata: Object, scrollHint: string, elementCount: number, devicePixelRatio: number, viewportWidth: number, viewportHeight: number}>}
  */
-export async function capturePageState(tabId, visionFilter, options) {
+export async function capturePageState(tabId, options) {
   const minimalElements = !!(options && options.minimalElements);
   const elMap = await buildElementMap(tabId);
   const metadata = await getPageMetadata(tabId);
@@ -1252,15 +1123,10 @@ export async function capturePageState(tabId, visionFilter, options) {
   currentViewportHeight = viewport.height;
 
   const cleanScreenshot = await captureScreenshot(tabId);
-  if (visionFilter && (visionFilter.css || visionFilter.svg)) {
-    await applyVisionFilter(tabId, visionFilter);
-  }
-  await annotateElements(tabId, elMap);
-  const screenshot = await captureScreenshot(tabId);
-  await removeAnnotations(tabId);
-  if (visionFilter && (visionFilter.css || visionFilter.svg)) {
-    await removeVisionFilter(tabId);
-  }
+
+  const elementsForAnnotation = Object.values(elMap).map(function (e) {
+    return { index: e.index, tag: e.tag, boundingBox: e.boundingBox };
+  });
 
   const interactiveElements = formatElementMapForLLM(elMap, { minimal: minimalElements });
 
@@ -1279,8 +1145,8 @@ export async function capturePageState(tabId, visionFilter, options) {
   const elementCount = Object.keys(elMap).length;
 
   return {
-    screenshot,
     cleanScreenshot,
+    elementsForAnnotation,
     interactiveElements,
     metadata,
     scrollHint,

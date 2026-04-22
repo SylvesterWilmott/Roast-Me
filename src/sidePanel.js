@@ -968,6 +968,25 @@ function addMessage(text, type) {
 }
 
 let typingEl = null;
+let lastThinkingVerb = "";
+
+/**
+ * Returns one of the pipe-separated THINKING verbs from i18n, avoiding
+ * an immediate repeat so successive steps feel varied.
+ * @returns {string}
+ */
+function pickThinkingVerb() {
+  const raw = msg("THINKING");
+  const verbs = raw.split("|").map(function (v) { return v.trim(); }).filter(Boolean);
+  if (verbs.length === 0) return raw;
+  if (verbs.length === 1) return verbs[0];
+  let pick;
+  do {
+    pick = verbs[Math.floor(Math.random() * verbs.length)];
+  } while (pick === lastThinkingVerb);
+  lastThinkingVerb = pick;
+  return pick;
+}
 
 /**
  * Shows the animated typing indicator in the message feed.
@@ -976,7 +995,7 @@ function showTypingIndicator() {
   hideTypingIndicator();
   typingEl = document.createElement("div");
   typingEl.className = "typing-indicator";
-  typingEl.textContent = msg("THINKING");
+  typingEl.textContent = pickThinkingVerb();
   messagesEl.appendChild(typingEl);
   messagesEl.scrollTop = messagesEl.scrollHeight;
 }
@@ -1176,14 +1195,9 @@ function compositeStepImage(src, gesture) {
 function drawGesture(ctx, g) {
   if (POINT_GESTURE_SET.has(g.type)) {
     ctx.save();
-    ctx.strokeStyle = GESTURE_COLOR;
-    ctx.lineWidth = 10;
-    ctx.beginPath();
-    ctx.arc(g.x, g.y, 40, 0, Math.PI * 2);
-    ctx.stroke();
     ctx.fillStyle = GESTURE_COLOR;
     ctx.beginPath();
-    ctx.arc(g.x, g.y, 14, 0, Math.PI * 2);
+    ctx.arc(g.x, g.y, 22, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
     return;

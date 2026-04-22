@@ -1,2 +1,3 @@
-- Agent can type but cannot insert newlines, when the agent types will is use \n for newline? we would need to emit an enter key for such cases or better still instruct it to hit enter.. or use a special character to indicate an enter key newline
-- Remove annotations from the visible screen and use an offscreen canvas to apply them before sending to AI
+- increase the number of max steps in a task
+- Improve the promp to help the agent embody the persona
+- Add permission dialog for risky actions

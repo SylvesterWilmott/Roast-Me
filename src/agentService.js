@@ -29,12 +29,14 @@ import {
   setApprovedOrigin,
   consumeBlockedNavigations,
   setLLMImageSize,
+  TAG_COLORS,
+  DEFAULT_COLOR,
 } from "./cdp.js";
 import {
   buildSystemPrompt,
   buildStepPrompt,
 } from "./prompts.js";
-import { resizeBase64Image } from "./image.js";
+import { resizeBase64Image, renderAnnotatedScreenshot } from "./image.js";
 
 const LLM_SCREENSHOT_MAX_WIDTH = 1024;
 const LLM_SCREENSHOT_QUALITY = 0.85;
@@ -77,28 +79,26 @@ function getOrigin(url) {
   }
 }
 
-// Machado-style color-blindness matrices (20 values for SVG feColorMatrix type="matrix")
+// Machado-style color-blindness matrices (20-value row-major 4x5, feColorMatrix format)
 const COLOR_BLINDNESS_MATRICES = {
-  protanopia: "0.567 0.433 0 0 0  0.558 0.442 0 0 0  0 0.242 0.758 0 0  0 0 0 1 0",
-  deuteranopia: "0.625 0.375 0 0 0  0.7 0.3 0 0 0  0 0.3 0.7 0 0  0 0 0 1 0",
-  tritanopia: "0.95 0.05 0 0 0  0 0.433 0.567 0 0  0 0.475 0.525 0 0  0 0 0 1 0",
-  achromatopsia: "0.299 0.587 0.114 0 0  0.299 0.587 0.114 0 0  0.299 0.587 0.114 0 0  0 0 0 1 0",
+  protanopia:    [0.567, 0.433, 0,     0, 0,   0.558, 0.442, 0,     0, 0,   0,     0.242, 0.758, 0, 0,   0, 0, 0, 1, 0],
+  deuteranopia:  [0.625, 0.375, 0,     0, 0,   0.7,   0.3,   0,     0, 0,   0,     0.3,   0.7,   0, 0,   0, 0, 0, 1, 0],
+  tritanopia:    [0.95,  0.05,  0,     0, 0,   0,     0.433, 0.567, 0, 0,   0,     0.475, 0.525, 0, 0,   0, 0, 0, 1, 0],
+  achromatopsia: [0.299, 0.587, 0.114, 0, 0,   0.299, 0.587, 0.114, 0, 0,   0.299, 0.587, 0.114, 0, 0,   0, 0, 0, 1, 0],
 };
 
 /**
- * Produces a vision-filter descriptor (CSS + optional SVG defs) from a persona's
- * colorBlindness trait, or null if nothing needs to be applied.
+ * Returns the color-blindness transform matrix for a persona, or null if
+ * none should be applied. The matrix is passed to renderAnnotatedScreenshot
+ * which applies it on an offscreen canvas.
  * @param {Object} persona - The persona.
- * @returns {{css: string, svg: string}|null}
+ * @returns {number[]|null}
  */
-function buildVisionFilter(persona) {
+function pickColorMatrix(persona) {
   if (!persona || persona.sighted === false) return null;
   const cbType = persona.colorBlindness && persona.colorBlindness !== "none" ? persona.colorBlindness : null;
   if (!cbType || !COLOR_BLINDNESS_MATRICES[cbType]) return null;
-
-  const filterId = `ux-cb-${cbType}`;
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="0" height="0"><defs><filter id="${filterId}" color-interpolation-filters="sRGB"><feColorMatrix type="matrix" values="${COLOR_BLINDNESS_MATRICES[cbType]}"/></filter></defs></svg>`;
-  return { css: `url(#${filterId})`, svg };
+  return COLOR_BLINDNESS_MATRICES[cbType];
 }
 
 /**
@@ -276,7 +276,7 @@ export default class AgentService {
     this.sessionHistory = [];
     this.systemPrompt = "";
     this.loopDetector = null;
-    this.visionFilter = null;
+    this.colorMatrix = null;
     this.abortController = null;
   }
 
@@ -299,7 +299,7 @@ export default class AgentService {
     this.productContext = productContext || "";
     this.sessionHistory = [];
     this.isRunning = true;
-    this.visionFilter = buildVisionFilter(persona);
+    this.colorMatrix = pickColorMatrix(persona);
     this.sightedA11y = sightedA11y !== false;
     this.claude = new ClaudeClient(apiKey, model);
     this.systemPrompt = buildSystemPrompt(persona, productContext);
@@ -352,7 +352,7 @@ export default class AgentService {
       try {
         const sighted = this.persona && this.persona.sighted !== false;
         const minimalElements = sighted && !this.sightedA11y;
-        pageState = await capturePageState(this.tabId, this.visionFilter, { minimalElements });
+        pageState = await capturePageState(this.tabId, { minimalElements });
       } catch (err) {
         throw new Error(`Failed to capture page state: ${err.message}`);
       }
@@ -375,7 +375,6 @@ export default class AgentService {
           reasoning: `That would've taken me off ${startHost} to ${targetHosts} — this test stays on the site I started on. Backing up to try a different path.`,
           observation: "",
           sentiment: "neutral",
-          screenshot: pageState.screenshot,
           cleanScreenshot: pageState.cleanScreenshot,
           gesture: null,
           url: pageState.metadata.url,
@@ -399,14 +398,28 @@ export default class AgentService {
 
       const sighted = this.persona && this.persona.sighted !== false;
       let llmImage = null;
+      let renderedBase64 = pageState.cleanScreenshot;
       if (sighted) {
         try {
-          llmImage = await resizeBase64Image(pageState.screenshot, "image/png", LLM_SCREENSHOT_MAX_WIDTH, LLM_SCREENSHOT_QUALITY);
+          const rendered = await renderAnnotatedScreenshot(
+            pageState.cleanScreenshot,
+            pageState.elementsForAnnotation,
+            pageState.devicePixelRatio || 1,
+            TAG_COLORS,
+            DEFAULT_COLOR,
+            this.colorMatrix,
+          );
+          renderedBase64 = rendered.data;
+        } catch (err) {
+          console.warn("[Agent] Offscreen render failed, sending clean screenshot:", err.message);
+        }
+        try {
+          llmImage = await resizeBase64Image(renderedBase64, "image/png", LLM_SCREENSHOT_MAX_WIDTH, LLM_SCREENSHOT_QUALITY);
         } catch (err) {
           console.warn("[Agent] Screenshot resize failed, sending original:", err.message);
           const fallbackDpr = pageState.devicePixelRatio || 1;
           llmImage = {
-            data: pageState.screenshot,
+            data: renderedBase64,
             mediaType: "image/png",
             width: Math.round((pageState.viewportWidth || 0) * fallbackDpr),
             height: Math.round((pageState.viewportHeight || 0) * fallbackDpr),
@@ -445,7 +458,6 @@ export default class AgentService {
           action: { type: "error" },
           reasoning: `LLM error: ${err.message}`,
           observation: "",
-          screenshot: pageState.screenshot,
           cleanScreenshot: pageState.cleanScreenshot,
           gesture: null,
           url: pageState.metadata.url,
@@ -472,7 +484,6 @@ export default class AgentService {
           reasoning: response.reasoning || "No actions returned by LLM",
           observation: response.observation || "",
         sentiment: response.sentiment || "neutral",
-          screenshot: pageState.screenshot,
           cleanScreenshot: pageState.cleanScreenshot,
           gesture: null,
           url: pageState.metadata.url,
@@ -556,7 +567,6 @@ export default class AgentService {
         reasoning: response.reasoning || "",
         observation: response.observation || "",
         sentiment: response.sentiment || "neutral",
-        screenshot: pageState.screenshot,
         cleanScreenshot: pageState.cleanScreenshot,
         gesture: buildGesture(lastAction, pageState.devicePixelRatio),
         url: pageState.metadata.url,
