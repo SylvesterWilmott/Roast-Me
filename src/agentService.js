@@ -380,6 +380,7 @@ export default class AgentService {
           url: pageState.metadata.url,
           success: false,
           error: `Navigation to ${targetHosts} blocked — tests are scoped to ${startHost}.`,
+          phase: "complete",
         };
         this.sessionHistory.push(blockedStep);
         if (onStepCallback) onStepCallback(blockedStep);
@@ -463,6 +464,7 @@ export default class AgentService {
           url: pageState.metadata.url,
           success: false,
           error: err.message,
+          phase: "complete",
         };
 
         this.sessionHistory.push(stepRecord);
@@ -489,10 +491,25 @@ export default class AgentService {
           url: pageState.metadata.url,
           success: false,
           error: "LLM returned no actions",
+          phase: "complete",
         };
         this.sessionHistory.push(stepRecord);
         if (onStepCallback) onStepCallback(stepRecord);
         break;
+      }
+
+      if (onStepCallback) {
+        onStepCallback({
+          stepNumber,
+          action: actions[0],
+          reasoning: response.reasoning || "",
+          observation: response.observation || "",
+          sentiment: response.sentiment || "neutral",
+          cleanScreenshot: pageState.cleanScreenshot,
+          gesture: buildGesture(actions[0], pageState.devicePixelRatio),
+          url: pageState.metadata.url,
+          phase: "announce",
+        });
       }
 
       let lastAction = actions[0];
@@ -572,6 +589,7 @@ export default class AgentService {
         url: pageState.metadata.url,
         success: allSuccess,
         error: lastError,
+        phase: "complete",
       };
 
       this.sessionHistory.push(stepRecord);

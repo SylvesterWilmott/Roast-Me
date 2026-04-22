@@ -1097,19 +1097,37 @@ function onTestError(error) {
  * Renders a step update from the background as a chat message.
  * @param {Object} step - The step data.
  */
+var lastAnnouncedStep = -1;
+
 function onStepUpdate(step) {
+  if (step.phase === "announce") {
+    hideTypingIndicator();
+
+    var announceEl = null;
+    if (step.reasoning) {
+      announceEl = addMessage(step.reasoning, "ai");
+    }
+    if (step.cleanScreenshot) {
+      if (!announceEl) announceEl = addMessage("", "ai");
+      appendStepScreenshot(announceEl, step.cleanScreenshot, step.gesture);
+    }
+    lastAnnouncedStep = step.stepNumber;
+    return;
+  }
+
   hideTypingIndicator();
   stepCount++;
   sessionHistory.push(step);
 
-  var aiEl = null;
-  if (step.reasoning) {
-    aiEl = addMessage(step.reasoning, "ai");
-  }
-
-  if (step.cleanScreenshot) {
-    if (!aiEl) aiEl = addMessage("", "ai");
-    appendStepScreenshot(aiEl, step.cleanScreenshot, step.gesture);
+  if (step.stepNumber !== lastAnnouncedStep) {
+    var aiEl = null;
+    if (step.reasoning) {
+      aiEl = addMessage(step.reasoning, "ai");
+    }
+    if (step.cleanScreenshot) {
+      if (!aiEl) aiEl = addMessage("", "ai");
+      appendStepScreenshot(aiEl, step.cleanScreenshot, step.gesture);
+    }
   }
 
   if (!step.success && step.action.type !== "blocked") {
