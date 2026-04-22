@@ -41,7 +41,7 @@ import { resizeBase64Image, renderAnnotatedScreenshot } from "./image.js";
 const LLM_SCREENSHOT_MAX_WIDTH = 1024;
 const LLM_SCREENSHOT_QUALITY = 0.85;
 
-const MAX_STEPS = 30;
+const MAX_STEPS = 100;
 const MAX_CONSECUTIVE_FAILURES = 3;
 const MAX_ACTIONS_PER_STEP = 4;
 const TERMINAL_ACTIONS = new Set(["done", "fail"]);

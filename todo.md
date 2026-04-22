@@ -1,3 +1,2 @@
-- increase the number of max steps in a task
 - Improve the promp to help the agent embody the persona
 - Add permission dialog for risky actions
