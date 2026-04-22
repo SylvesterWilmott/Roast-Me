@@ -1,3 +1,1 @@
-- Improve the promp to help the agent embody the persona
 - Add permission dialog for risky actions
-- Swap rendering order to AI announces action before it's executed
