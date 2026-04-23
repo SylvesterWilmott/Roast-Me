@@ -289,6 +289,12 @@
   "THINKING": {
     "message": "Thinking...|Cooking...|Pondering...|Scheming...|Mulling...|Plotting...|Brewing...|Musing...|Noodling...|Ruminating..."
   },
+  "CONFIRM_APPROVE": {
+    "message": "Approve"
+  },
+  "CONFIRM_REJECT": {
+    "message": "Reject"
+  },
   "EMPTY_RESPONSE_ERROR": {
     "message": "Claude returned an empty response"
   },

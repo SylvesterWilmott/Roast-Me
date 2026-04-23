@@ -28,6 +28,10 @@ function handleMessage(msg, sender, sendResponse) {
     case "STOP_TEST":
       handleStopTest(msg, sendResponse);
       return true;
+    case "CONFIRM_RESPONSE":
+      if (agentService) agentService.resolveConfirm(!!msg.approved);
+      sendResponse({ success: true });
+      return true;
   }
 }
 

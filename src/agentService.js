@@ -278,6 +278,21 @@ export default class AgentService {
     this.loopDetector = null;
     this.colorMatrix = null;
     this.abortController = null;
+    this.rejectedActions = [];
+    this._confirmResolver = null;
+  }
+
+  /**
+   * Resolves the currently-pending confirm Promise with the researcher's answer.
+   * Called by the background message handler when the side panel reports a click.
+   * @param {boolean} approved
+   */
+  resolveConfirm(approved) {
+    if (this._confirmResolver) {
+      const r = this._confirmResolver;
+      this._confirmResolver = null;
+      r(!!approved);
+    }
   }
 
   /**
@@ -298,6 +313,8 @@ export default class AgentService {
     this.task = task;
     this.productContext = productContext || "";
     this.sessionHistory = [];
+    this.rejectedActions = [];
+    this._confirmResolver = null;
     this.isRunning = true;
     this.colorMatrix = pickColorMatrix(persona);
     this.sightedA11y = sightedA11y !== false;
@@ -329,6 +346,11 @@ export default class AgentService {
    */
   async stopTest() {
     this.isRunning = false;
+    if (this._confirmResolver) {
+      const r = this._confirmResolver;
+      this._confirmResolver = null;
+      r(false);
+    }
     if (this.abortController) {
       this.abortController.abort();
     }
@@ -354,6 +376,10 @@ export default class AgentService {
         const minimalElements = sighted && !this.sightedA11y;
         pageState = await capturePageState(this.tabId, { minimalElements });
       } catch (err) {
+        if (/chrome-extension:\/\/|different extension/i.test(err.message || "")) {
+          console.warn("[Agent] Capture blocked by injected extension frame; skipping step:", err.message);
+          continue;
+        }
         throw new Error(`Failed to capture page state: ${err.message}`);
       }
 
@@ -392,7 +418,7 @@ export default class AgentService {
       const pageFingerprint = `${pageState.metadata.url}|${pageState.elementCount}`;
       const nudge = this.loopDetector.getNudge();
 
-      let stepPrompt = buildStepPrompt(this.task, this.sessionHistory, pageState, this.persona);
+      let stepPrompt = buildStepPrompt(this.task, this.sessionHistory, pageState, this.persona, this.rejectedActions);
       if (nudge) {
         stepPrompt += `\n\nSYSTEM NOTE: ${nudge}`;
       }
@@ -516,6 +542,7 @@ export default class AgentService {
       let allSuccess = true;
       let lastError = null;
       let shouldBreak = false;
+      let confirmHandled = false;
 
       const urlBefore = pageState.metadata.url;
 
@@ -530,6 +557,65 @@ export default class AgentService {
 
         if (TERMINAL_ACTIONS.has(action.type)) {
           shouldBreak = true;
+          break;
+        }
+
+        if (action.type === "confirm") {
+          if (onStepCallback) {
+            onStepCallback({
+              stepNumber,
+              message: action.value || "Proceed with this action?",
+              url: pageState.metadata.url,
+              phase: "confirm_request",
+            });
+          }
+          const approved = await new Promise((resolve) => {
+            this._confirmResolver = resolve;
+          });
+          if (!this.isRunning) {
+            shouldBreak = true;
+            break;
+          }
+          const description = (response.reasoning && response.reasoning.trim()) || action.value || "unspecified action";
+          if (approved) {
+            const approvalRecord = {
+              stepNumber,
+              action: { type: "confirm_approved" },
+              reasoning: "Researcher approved. Next step will perform the action.",
+              observation: "",
+              sentiment: "neutral",
+              cleanScreenshot: pageState.cleanScreenshot,
+              gesture: null,
+              url: pageState.metadata.url,
+              success: true,
+              error: null,
+              phase: "complete",
+            };
+            this.sessionHistory.push(approvalRecord);
+            if (onStepCallback) onStepCallback(approvalRecord);
+          } else {
+            this.rejectedActions.push({
+              step: stepNumber,
+              description,
+              url: pageState.metadata.url,
+            });
+            const rejectionRecord = {
+              stepNumber,
+              action: { type: "confirm_rejected" },
+              reasoning: `Researcher REJECTED this action: "${description}". Do not retry, rephrase, or attempt a similar bypass.`,
+              observation: "",
+              sentiment: "neutral",
+              cleanScreenshot: pageState.cleanScreenshot,
+              gesture: null,
+              url: pageState.metadata.url,
+              success: false,
+              error: "Researcher rejected — action was not performed",
+              phase: "complete",
+            };
+            this.sessionHistory.push(rejectionRecord);
+            if (onStepCallback) onStepCallback(rejectionRecord);
+          }
+          confirmHandled = true;
           break;
         }
 
@@ -570,6 +656,11 @@ export default class AgentService {
       }
 
       this.loopDetector.addAction(actions[0], pageFingerprint);
+
+      if (confirmHandled) {
+        if (shouldBreak) break;
+        continue;
+      }
 
       if (allSuccess) {
         consecutiveFailures = 0;
@@ -649,13 +740,17 @@ export default class AgentService {
    * @returns {Array<Object>} Array of action objects, possibly empty.
    */
   _normalizeActions(response) {
+    let actions = [];
     if (response.actions && Array.isArray(response.actions) && response.actions.length > 0) {
-      return response.actions;
+      actions = response.actions;
+    } else if (response.action && response.action.type) {
+      actions = [response.action];
     }
-    if (response.action && response.action.type) {
-      return [response.action];
+    const firstConfirm = actions.find(function (a) { return a && a.type === "confirm"; });
+    if (firstConfirm) {
+      return [firstConfirm];
     }
-    return [];
+    return actions;
   }
 
   /**

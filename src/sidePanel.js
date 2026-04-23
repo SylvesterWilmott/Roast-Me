@@ -1130,7 +1130,7 @@ function onStepUpdate(step) {
     }
   }
 
-  if (!step.success && step.action.type !== "blocked") {
+  if (!step.success && step.action.type !== "blocked" && step.action.type !== "confirm_rejected") {
     addMessage(msg("ACTION_FAILED", [step.action.type]), "status msg-error");
   }
 
@@ -1143,6 +1143,49 @@ const POINT_GESTURE_SET = new Set([
 ]);
 const GESTURE_COLOR = "#ef4444";
 const GESTURE_COLOR_RGB = "239, 68, 68";
+
+/**
+ * Renders an approve/reject permission block in the chat. Buttons post a
+ * CONFIRM_RESPONSE to the background, which resolves the agent's pending Promise.
+ * @param {string} message - The plain-language description of the pending action.
+ */
+function showConfirmPrompt(message) {
+  var el = document.createElement("div");
+  el.className = "msg msg-confirm";
+
+  var text = document.createElement("div");
+  text.className = "confirm-message";
+  text.textContent = message;
+
+  var actions = document.createElement("div");
+  actions.className = "confirm-actions";
+
+  var approveBtn = document.createElement("button");
+  approveBtn.className = "btn-primary-sm";
+  approveBtn.textContent = msg("CONFIRM_APPROVE");
+
+  var rejectBtn = document.createElement("button");
+  rejectBtn.className = "action-btn";
+  rejectBtn.textContent = msg("CONFIRM_REJECT");
+
+  actions.appendChild(rejectBtn);
+  actions.appendChild(approveBtn);
+  el.appendChild(text);
+  el.appendChild(actions);
+  messagesEl.appendChild(el);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+
+  function respond(approved) {
+    approveBtn.disabled = true;
+    rejectBtn.disabled = true;
+    el.classList.add(approved ? "confirmed" : "rejected");
+    ChromeUtils.sendMessage({ target: "background", type: "CONFIRM_RESPONSE", approved: approved }).catch(function () {});
+    showTypingIndicator();
+  }
+
+  approveBtn.addEventListener("click", function () { respond(true); });
+  rejectBtn.addEventListener("click", function () { respond(false); });
+}
 
 /**
  * Appends a screenshot with the gesture composited onto it as a single PNG.
@@ -1388,7 +1431,12 @@ chrome.runtime.onMessage.addListener(function (message) {
 
   switch (message.type) {
     case "STEP_UPDATE":
-      onStepUpdate(message.step);
+      if (message.step && message.step.phase === "confirm_request") {
+        hideTypingIndicator();
+        showConfirmPrompt(message.step.message);
+      } else {
+        onStepUpdate(message.step);
+      }
       break;
     case "TEST_COMPLETE":
       onTestComplete();
