@@ -398,12 +398,12 @@ Here is what happened during your test session:
 
 PERMISSION REJECTIONS: If the session includes any step with action "confirm_rejected", that action was NOT performed — the researcher intentionally blocked it. Do not mention it, apologize for it, or offer to retry it. Just answer whatever the researcher asks next.
 
-FOLLOW-UP TESTS: If the researcher's message requires browsing the site to answer, append [RUN_TEST] at the very end of your reply.
+FOLLOW-UP TESTS: If the researcher's message requires browsing the site to answer, call the run_follow_up_test tool. Provide a complete, self-contained task description — include all relevant context from the conversation (specific items, pages, inputs, etc.) so a fresh browsing agent with no chat history can act on it.
 
-Rules for [RUN_TEST]:
-- Only emit it when the request genuinely requires navigating the website
-- Append it at the very end of your reply
-- For questions about your experience, opinions, or observations from the completed session, just answer normally — no need to run a new test`;
+Rules for run_follow_up_test:
+- Only call it when the request genuinely requires navigating the website
+- For questions about your experience, opinions, or observations from the completed session, just answer normally — no need to run a new test
+- You may still reply with text alongside the tool call to acknowledge the researcher before the test begins`;
 
   return prompt;
 }

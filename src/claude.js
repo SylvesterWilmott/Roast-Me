@@ -105,13 +105,15 @@ export default class ClaudeClient {
 
   /**
    * Streams a multi-turn conversation, calling onChunk with each text delta.
+   * Tool input deltas are accumulated silently and returned as structured calls.
    * @param {string} systemPrompt - The system prompt.
    * @param {Array<Object>} messages - Array of {role, content} message objects.
    * @param {Function} onChunk - Called with each text delta string as it arrives.
    * @param {AbortSignal} [signal] - Optional abort signal to cancel the stream.
-   * @returns {Promise<string>} The complete accumulated response text.
+   * @param {Array<Object>} [tools] - Optional tool definitions the model may call.
+   * @returns {Promise<{text: string, toolCalls: Array<{name: string, input: Object}>}>}
    */
-  async streamChat(systemPrompt, messages, onChunk, signal) {
+  async streamChat(systemPrompt, messages, onChunk, signal, tools) {
     const body = {
       model: this.model,
       max_tokens: 8192,
@@ -126,6 +128,11 @@ export default class ClaudeClient {
       messages: messages,
       stream: true,
     };
+
+    if (tools && tools.length > 0) {
+      body.tools = tools;
+      body.tool_choice = { type: "auto" };
+    }
 
     const response = await fetch(API_BASE, {
       method: "POST",
@@ -154,6 +161,7 @@ export default class ClaudeClient {
     const decoder = new TextDecoder();
     let accumulated = "";
     let buffer = "";
+    const contentBlocks = {};
 
     while (true) {
       const { done, value } = await reader.read();
@@ -170,9 +178,19 @@ export default class ClaudeClient {
 
         try {
           const event = JSON.parse(data);
-          if (event.type === "content_block_delta" && event.delta?.text) {
-            accumulated += event.delta.text;
-            onChunk(event.delta.text);
+          if (event.type === "content_block_start") {
+            contentBlocks[event.index] = {
+              type: event.content_block.type,
+              name: event.content_block.name,
+              inputJson: "",
+            };
+          } else if (event.type === "content_block_delta") {
+            if (event.delta?.type === "text_delta" && event.delta.text) {
+              accumulated += event.delta.text;
+              onChunk(event.delta.text);
+            } else if (event.delta?.type === "input_json_delta" && contentBlocks[event.index]) {
+              contentBlocks[event.index].inputJson += event.delta.partial_json || "";
+            }
           }
         } catch (err) {
           // Skip unparseable lines
@@ -180,7 +198,18 @@ export default class ClaudeClient {
       }
     }
 
-    return accumulated;
+    const toolCalls = [];
+    for (const block of Object.values(contentBlocks)) {
+      if (block.type !== "tool_use" || !block.name) continue;
+      try {
+        const input = block.inputJson ? JSON.parse(block.inputJson) : {};
+        toolCalls.push({ name: block.name, input });
+      } catch (err) {
+        // Skip tool calls with unparseable input
+      }
+    }
+
+    return { text: accumulated, toolCalls };
   }
 
   /**

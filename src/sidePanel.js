@@ -13,6 +13,23 @@ marked.setOptions({
   gfm: true,
 });
 
+const CHAT_TOOLS = [
+  {
+    name: "run_follow_up_test",
+    description: "Launch a follow-up browser test when the researcher's message requires navigating the website to answer. The task description must be complete and self-contained — the browsing agent runs in a fresh context with no access to the chat history.",
+    input_schema: {
+      type: "object",
+      properties: {
+        task: {
+          type: "string",
+          description: "A complete, self-contained description of what to do in the browser, including any specific items, pages, or inputs referenced in the conversation.",
+        },
+      },
+      required: ["task"],
+    },
+  },
+];
+
 /**
  * Returns a localized string from messages.json.
  * @param {string} key - The message key.
@@ -1341,7 +1358,7 @@ async function sendChatMessage(text) {
     var claude = await getClaudeClient();
     var systemPrompt = buildChatSystemPrompt(currentPersona, currentTask, sessionHistory);
 
-    await claude.streamChat(systemPrompt, chatHistory, function (delta) {
+    var result = await claude.streamChat(systemPrompt, chatHistory, function (delta) {
       if (!aiEl) {
         hideTypingIndicator();
         aiEl = addMessage("", "ai");
@@ -1349,26 +1366,21 @@ async function sendChatMessage(text) {
       accumulated += delta;
       aiEl.innerHTML = marked.parse(accumulated);
       messagesEl.scrollTop = messagesEl.scrollHeight;
-    }, chatAbortController.signal);
+    }, chatAbortController.signal, CHAT_TOOLS);
 
-    chatHistory.push({ role: "assistant", content: accumulated });
+    if (accumulated) {
+      chatHistory.push({ role: "assistant", content: accumulated });
+    } else if (aiEl) {
+      aiEl.remove();
+      aiEl = null;
+    }
 
-    if (/\[RUN_TEST\]/.test(accumulated)) {
-      var cleanText = accumulated.replace(/\[RUN_TEST\][\s\S]*$/, "").trim();
-
-      if (cleanText && aiEl) {
-        aiEl.innerHTML = marked.parse(cleanText);
-      } else if (!cleanText && aiEl) {
-        aiEl.remove();
-      }
-
-      chatHistory[chatHistory.length - 1].content = cleanText;
-      messagesEl.scrollTop = messagesEl.scrollHeight;
-
+    var followUpCall = result.toolCalls.find(function (c) { return c.name === "run_follow_up_test"; });
+    if (followUpCall) {
       isChatting = false;
       chatAbortController = null;
       sendBtn.classList.remove("stop");
-      launchFollowUpTest(text);
+      launchFollowUpTest(followUpCall.input.task || text);
       return;
     }
   } catch (err) {
