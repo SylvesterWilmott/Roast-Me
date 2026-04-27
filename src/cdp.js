@@ -1628,7 +1628,7 @@ export async function dispatchClick(tabId, x, y) {
 // (the cursor's tip) at the centre (24, 24). Combined with `marginLeft/Top =
 // -size/2`, `transform: translate(x, y)` puts the tip exactly on (x, y).
 // Filter id is namespaced so it can't collide with anything on the page.
-const CURSOR_SVG = '<svg width="100%" height="100%" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><g filter="url(#__roast-cursor-shadow)"><path d="M28.8924 41.7111L24.3338 25.7195C24.0984 24.8938 24.956 24.1808 25.7358 24.5539L40.8385 31.7789C41.6416 32.1631 41.5812 33.3157 40.7425 33.6128L34.5312 35.8136C34.3056 35.8935 34.1164 36.0508 33.9978 36.2571L30.7318 41.9358C30.2908 42.7026 29.1347 42.5613 28.8924 41.7111Z" fill="#EF4415"/><path d="M23.8508 25.8541C23.4977 24.6156 24.7836 23.5465 25.9533 24.106L41.0564 31.3311C42.2607 31.9075 42.1699 33.6356 40.9119 34.0813L34.7012 36.2822C34.5885 36.3221 34.4939 36.4009 34.4346 36.5038L31.1679 42.1826C30.5065 43.3326 28.7731 43.1211 28.4093 41.846L23.8508 25.8541Z" stroke="#EF4415"/></g><defs><filter id="__roast-cursor-shadow" x="21.2881" y="22.4541" width="23.124" height="23.979" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB"><feFlood flood-opacity="0" result="BackgroundImageFix"/><feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/><feOffset dy="1"/><feGaussianBlur stdDeviation="1"/><feComposite in2="hardAlpha" operator="out"/><feColorMatrix type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.08 0"/><feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow"/><feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow" result="shape"/></filter></defs></svg>';
+const CURSOR_SVG = '<svg width="100%" height="100%" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" style="fill:none !important;stroke:none !important;overflow:visible !important;"><g filter="url(#__roast-cursor-shadow)"><path d="M28.8924 41.7111L24.3338 25.7195C24.0984 24.8938 24.956 24.1808 25.7358 24.5539L40.8385 31.7789C41.6416 32.1631 41.5812 33.3157 40.7425 33.6128L34.5312 35.8136C34.3056 35.8935 34.1164 36.0508 33.9978 36.2571L30.7318 41.9358C30.2908 42.7026 29.1347 42.5613 28.8924 41.7111Z" style="fill:#EF4415 !important;stroke:none !important;"/><path d="M23.8508 25.8541C23.4977 24.6156 24.7836 23.5465 25.9533 24.106L41.0564 31.3311C42.2607 31.9075 42.1699 33.6356 40.9119 34.0813L34.7012 36.2822C34.5885 36.3221 34.4939 36.4009 34.4346 36.5038L31.1679 42.1826C30.5065 43.3326 28.7731 43.1211 28.4093 41.846L23.8508 25.8541Z" style="fill:none !important;stroke:#EF4415 !important;"/></g><defs><filter id="__roast-cursor-shadow" x="21.2881" y="22.4541" width="23.124" height="23.979" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB"><feFlood flood-opacity="0" result="BackgroundImageFix"/><feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/><feOffset dy="1"/><feGaussianBlur stdDeviation="1"/><feComposite in2="hardAlpha" operator="out"/><feColorMatrix type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.08 0"/><feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow"/><feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow" result="shape"/></filter></defs></svg>';
 
 /**
  * Renders an animated cursor moving from one CSS coordinate to another, then
@@ -1696,42 +1696,56 @@ export async function renderCursorMove(tabId, from, to, options) {
         el = document.createElement("div");
         el.id = ID;
         el.setAttribute("aria-hidden", "true");
-        Object.assign(el.style, {
-          position: "fixed",
-          top: "0px",
-          left: "0px",
-          width: size + "px",
-          height: size + "px",
-          marginLeft: -(size / 2) + "px",
-          marginTop: -(size / 2) + "px",
-          pointerEvents: "none",
-          zIndex: "2147483647",
-          opacity: "0",
-          willChange: "transform, opacity",
-        });
+        // all: initial wipes inherited styles from the host page. Static
+        // layout/visual props get !important to defeat aggressive page CSS;
+        // properties we mutate at runtime (transform, transition, opacity,
+        // display) intentionally stay non-important so JS can update them.
+        el.style.cssText =
+          "all: initial;" +
+          "position: fixed !important;" +
+          "top: 0px !important;" +
+          "left: 0px !important;" +
+          "width: " + size + "px !important;" +
+          "height: " + size + "px !important;" +
+          "margin: " + -(size / 2) + "px 0 0 " + -(size / 2) + "px !important;" +
+          "padding: 0 !important;" +
+          "border: 0 !important;" +
+          "pointer-events: none !important;" +
+          "z-index: 2147483647 !important;" +
+          "box-sizing: content-box !important;" +
+          "transform-origin: 0 0 !important;" +
+          "will-change: transform, opacity;" +
+          "opacity: 0;";
         el.innerHTML = ${JSON.stringify(CURSOR_SVG)};
         labelEl = document.createElement("span");
         labelEl.id = LABEL_ID;
-        Object.assign(labelEl.style, {
-          position: "absolute",
-          left: "calc(50% + 26px)",
-          top: "calc(50% + 14px)",
-          transform: "translateY(-50%)",
-          display: "none",
-          height: "28px",
-          padding: "0 10px",
-          maxWidth: "130px",
-          boxSizing: "border-box",
-          font: '500 12px/28px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-          color: "#ffffff",
-          background: "#EF4415",
-          borderRadius: "14px",
-          boxShadow: "0 2px 6px rgba(0, 0, 0, 0.25)",
-          whiteSpace: "nowrap",
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          pointerEvents: "none",
-        });
+        labelEl.style.cssText =
+          "all: initial;" +
+          "position: absolute !important;" +
+          "left: calc(50% + 26px) !important;" +
+          "top: calc(50% + 14px) !important;" +
+          "transform: translateY(-50%) !important;" +
+          "height: 28px !important;" +
+          "padding: 0 10px !important;" +
+          "margin: 0 !important;" +
+          "border: 0 !important;" +
+          "max-width: 130px !important;" +
+          "min-width: 0 !important;" +
+          "box-sizing: border-box !important;" +
+          "font: 500 12px/28px system-ui, -apple-system, BlinkMacSystemFont, \\"Segoe UI\\", Roboto, sans-serif !important;" +
+          "letter-spacing: normal !important;" +
+          "text-transform: none !important;" +
+          "text-align: left !important;" +
+          "text-shadow: none !important;" +
+          "color: #ffffff !important;" +
+          "background: #EF4415 !important;" +
+          "border-radius: 14px !important;" +
+          "box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25) !important;" +
+          "white-space: nowrap !important;" +
+          "overflow: hidden !important;" +
+          "text-overflow: ellipsis !important;" +
+          "pointer-events: none !important;" +
+          "display: none;";
         el.appendChild(labelEl);
         (document.body || document.documentElement).appendChild(el);
       } else {
