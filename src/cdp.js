@@ -1645,18 +1645,32 @@ const CURSOR_SVG = '<svg width="100%" height="100%" viewBox="0 0 48 48" fill="no
  * @param {{x: number, y: number}|null} from - Starting CSS position, or null.
  * @param {{x: number, y: number}} to - Destination CSS position.
  * @param {Object} [options]
- * @param {number} [options.pxPerSecond=1400] - Constant cursor velocity.
+ * @param {number} [options.pxPerSecond=1400] - Average cursor velocity (move
+ *   duration scales linearly with distance, but the easing curve decelerates
+ *   into the target).
+ * @param {number} [options.minMs=300] - Floor on the move duration so short
+ *   hops don't read as teleports.
+ * @param {number} [options.maxMs=900] - Ceiling so long traversals don't crawl.
  * @param {number} [options.fadeMs=250] - Fade-out duration.
- * @param {number} [options.dwellMs=120] - Pause at target before fading.
+ * @param {number} [options.dwellMs=350] - Pause at target after arrival,
+ *   awaited by the caller before the action dispatches.
+ * @param {number} [options.postHoldMs=350] - Time the cursor remains fully
+ *   visible after the action dispatches, before the fade-out begins.
  * @param {number} [options.size=48] - Cursor canvas size in CSS pixels.
+ * @param {string} [options.label] - Optional text label rendered as a pill
+ *   beside the cursor (e.g. the persona's name). Empty/missing hides it.
  * @returns {Promise<void>}
  */
 export async function renderCursorMove(tabId, from, to, options) {
   const opts = options || {};
   const pxPerSecond = opts.pxPerSecond || 1400;
+  const minMs = opts.minMs || 300;
+  const maxMs = opts.maxMs || 900;
   const fadeMs = opts.fadeMs || 250;
-  const dwellMs = opts.dwellMs || 120;
+  const dwellMs = opts.dwellMs || 350;
+  const postHoldMs = opts.postHoldMs != null ? opts.postHoldMs : 350;
   const size = opts.size || 48;
+  const label = typeof opts.label === "string" ? opts.label : "";
 
   const fromExpr = from && typeof from.x === "number" && typeof from.y === "number"
     ? `{ x: ${from.x}, y: ${from.y} }`
@@ -1665,13 +1679,19 @@ export async function renderCursorMove(tabId, from, to, options) {
   const expression = `
     (function () {
       var ID = "__roast-cursor";
+      var LABEL_ID = ID + "-label";
       var size = ${size};
       var pxPerSecond = ${pxPerSecond};
+      var minMs = ${minMs};
+      var maxMs = ${maxMs};
       var dwellMs = ${dwellMs};
+      var postHoldMs = ${postHoldMs};
       var fadeMs = ${fadeMs};
       var to = { x: ${to.x}, y: ${to.y} };
       var fromOverride = ${fromExpr};
+      var labelText = ${JSON.stringify(label)};
       var el = document.getElementById(ID);
+      var labelEl;
       if (!el) {
         el = document.createElement("div");
         el.id = ID;
@@ -1690,26 +1710,61 @@ export async function renderCursorMove(tabId, from, to, options) {
           willChange: "transform, opacity",
         });
         el.innerHTML = ${JSON.stringify(CURSOR_SVG)};
+        labelEl = document.createElement("span");
+        labelEl.id = LABEL_ID;
+        Object.assign(labelEl.style, {
+          position: "absolute",
+          left: "calc(50% + 26px)",
+          top: "calc(50% + 14px)",
+          transform: "translateY(-50%)",
+          display: "none",
+          height: "28px",
+          padding: "0 10px",
+          maxWidth: "130px",
+          boxSizing: "border-box",
+          font: '500 12px/28px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+          color: "#ffffff",
+          background: "#EF4415",
+          borderRadius: "14px",
+          boxShadow: "0 2px 6px rgba(0, 0, 0, 0.25)",
+          whiteSpace: "nowrap",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          pointerEvents: "none",
+        });
+        el.appendChild(labelEl);
         (document.body || document.documentElement).appendChild(el);
+      } else {
+        labelEl = document.getElementById(LABEL_ID);
+      }
+      if (labelEl) {
+        if (labelText) {
+          labelEl.textContent = labelText;
+          labelEl.style.display = "inline-block";
+        } else {
+          labelEl.style.display = "none";
+        }
       }
       var start = fromOverride || { x: window.innerWidth / 2, y: window.innerHeight / 2 };
       var dx = to.x - start.x;
       var dy = to.y - start.y;
       var distance = Math.sqrt(dx * dx + dy * dy);
-      var moveMs = Math.round((distance / pxPerSecond) * 1000);
+      var moveMs = Math.max(minMs, Math.min(maxMs, Math.round((distance / pxPerSecond) * 1000)));
       el.style.transition = "transform 0ms linear, opacity 0ms linear";
       el.style.transform = "translate(" + start.x + "px, " + start.y + "px)";
       el.style.opacity = "1";
       // Force reflow so the next transition takes effect.
       void el.offsetWidth;
-      el.style.transition = "transform " + moveMs + "ms linear, opacity " + fadeMs + "ms ease-out";
+      el.style.transition = "transform " + moveMs + "ms cubic-bezier(0.22, 0.61, 0.36, 1), opacity " + fadeMs + "ms ease-out";
       el.style.transform = "translate(" + to.x + "px, " + to.y + "px)";
-      // Schedule fade-out in the page context — the awaiter only blocks on the move.
+      // Caller awaits move + dwell then dispatches the action. Fade-out is
+      // scheduled to start postHoldMs LATER so the cursor stays fully visible
+      // through the click/hover and a beat after, then fades.
       setTimeout(function () {
         if (!el.isConnected) return;
         el.style.opacity = "0";
-      }, moveMs + dwellMs);
-      return new Promise(function (resolve) { setTimeout(resolve, moveMs); });
+      }, moveMs + dwellMs + postHoldMs);
+      return new Promise(function (resolve) { setTimeout(resolve, moveMs + dwellMs); });
     })()
   `;
 

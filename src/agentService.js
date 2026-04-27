@@ -300,17 +300,16 @@ export default class AgentService {
   }
 
   /**
-   * Animates the on-page cursor dot to the given CSS coordinates and updates
-   * the tracked last position. Awaits the move so the action happens after the
-   * cursor arrives, then pauses briefly so the viewer can register the target
-   * before the click/hover dispatches.
+   * Animates the on-page cursor to the given CSS coordinates and updates the
+   * tracked last position. The helper awaits move + dwell, so this resolves
+   * exactly when the caller should dispatch the click/hover.
    * @param {number} x - Destination CSS x.
    * @param {number} y - Destination CSS y.
    */
   async _animateCursorTo(x, y) {
-    await renderCursorMove(this.tabId, this._lastCursorPos, { x, y });
+    const label = this.persona && this.persona.name ? this.persona.name : "";
+    await renderCursorMove(this.tabId, this._lastCursorPos, { x, y }, { label });
     this._lastCursorPos = { x, y };
-    await new Promise(function (resolve) { setTimeout(resolve, 200); });
   }
 
   /**
