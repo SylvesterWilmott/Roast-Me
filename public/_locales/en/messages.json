@@ -264,6 +264,15 @@
   "INVALID_API_KEY_ERROR": {
     "message": "Invalid Claude API key. Please check your key and try again."
   },
+  "INSUFFICIENT_CREDITS_ERROR": {
+    "message": "Insufficient API credits. Please top up your balance."
+  },
+  "SERVER_ERROR": {
+    "message": "The provider's servers are having issues. Please try again in a moment."
+  },
+  "NETWORK_ERROR": {
+    "message": "Network error. Check your internet connection and try again."
+  },
   "API_ERROR": {
     "message": "Claude API error ($status$): $details$",
     "placeholders": {

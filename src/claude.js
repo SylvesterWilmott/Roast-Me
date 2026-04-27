@@ -5,6 +5,19 @@ const DEFAULT_MODEL = "claude-sonnet-4-6";
 const API_VERSION = "2023-06-01";
 
 /**
+ * Extracts a human-readable error message from an API error response body.
+ * @param {string} body - The raw response body text.
+ * @returns {string} The parsed error message or a truncated fallback.
+ */
+function parseApiError(body) {
+  try {
+    const parsed = JSON.parse(body);
+    if (parsed.error && parsed.error.message) return parsed.error.message;
+  } catch (err) {}
+  return body.length > 200 ? body.substring(0, 200) + "..." : body;
+}
+
+/**
  * Client for the Claude Messages API.
  */
 export default class ClaudeClient {
@@ -111,9 +124,23 @@ export default class ClaudeClient {
    * @param {Function} onChunk - Called with each text delta string as it arrives.
    * @param {AbortSignal} [signal] - Optional abort signal to cancel the stream.
    * @param {Array<Object>} [tools] - Optional tool definitions the model may call.
-   * @returns {Promise<{text: string, toolCalls: Array<{name: string, input: Object}>}>}
+   * @returns {Promise<{text: string, toolCalls: Array<{id: string, name: string, input: Object}>}>}
    */
   async streamChat(systemPrompt, messages, onChunk, signal, tools) {
+    const cachedMessages = messages.map(function (m, i) {
+      if (i !== messages.length - 1) return m;
+      const blocks = typeof m.content === "string"
+        ? [{ type: "text", text: m.content }]
+        : m.content.slice();
+      for (let j = blocks.length - 1; j >= 0; j--) {
+        if (blocks[j] && blocks[j].type === "text") {
+          blocks[j] = Object.assign({}, blocks[j], { cache_control: { type: "ephemeral" } });
+          break;
+        }
+      }
+      return { role: m.role, content: blocks };
+    });
+
     const body = {
       model: this.model,
       max_tokens: 8192,
@@ -125,7 +152,7 @@ export default class ClaudeClient {
           cache_control: { type: "ephemeral" },
         },
       ],
-      messages: messages,
+      messages: cachedMessages,
       stream: true,
     };
 
@@ -134,27 +161,40 @@ export default class ClaudeClient {
       body.tool_choice = { type: "auto" };
     }
 
-    const response = await fetch(API_BASE, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": this.apiKey,
-        "anthropic-version": API_VERSION,
-        "anthropic-dangerous-direct-browser-access": "true",
-      },
-      body: JSON.stringify(body),
-      signal,
-    });
+    let response;
+    try {
+      response = await fetch(API_BASE, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": this.apiKey,
+          "anthropic-version": API_VERSION,
+          "anthropic-dangerous-direct-browser-access": "true",
+        },
+        body: JSON.stringify(body),
+        signal,
+      });
+    } catch (err) {
+      if (err.name === "AbortError") throw err;
+      throw new Error(chrome.i18n.getMessage("NETWORK_ERROR"));
+    }
 
     if (!response.ok) {
       const errorBody = await response.text();
-      if (response.status === 429) {
-        throw new Error(chrome.i18n.getMessage("RATE_LIMIT_ERROR"));
-      }
+      const errorMessage = parseApiError(errorBody);
       if (response.status === 401 || response.status === 403) {
         throw new Error(chrome.i18n.getMessage("INVALID_API_KEY_ERROR"));
       }
-      throw new Error(chrome.i18n.getMessage("API_ERROR", [String(response.status), errorBody]));
+      if (errorMessage.toLowerCase().includes("credit balance")) {
+        throw new Error(chrome.i18n.getMessage("INSUFFICIENT_CREDITS_ERROR"));
+      }
+      if (response.status === 429) {
+        throw new Error(chrome.i18n.getMessage("RATE_LIMIT_ERROR"));
+      }
+      if (response.status >= 500) {
+        throw new Error(chrome.i18n.getMessage("SERVER_ERROR"));
+      }
+      throw new Error(chrome.i18n.getMessage("API_ERROR", [String(response.status), errorMessage]));
     }
 
     const reader = response.body.getReader();
@@ -181,6 +221,7 @@ export default class ClaudeClient {
           if (event.type === "content_block_start") {
             contentBlocks[event.index] = {
               type: event.content_block.type,
+              id: event.content_block.id || null,
               name: event.content_block.name,
               inputJson: "",
             };
@@ -200,10 +241,10 @@ export default class ClaudeClient {
 
     const toolCalls = [];
     for (const block of Object.values(contentBlocks)) {
-      if (block.type !== "tool_use" || !block.name) continue;
+      if (block.type !== "tool_use" || !block.id || !block.name) continue;
       try {
         const input = block.inputJson ? JSON.parse(block.inputJson) : {};
-        toolCalls.push({ name: block.name, input });
+        toolCalls.push({ id: block.id, name: block.name, input });
       } catch (err) {
         // Skip tool calls with unparseable input
       }
@@ -220,28 +261,41 @@ export default class ClaudeClient {
    * @throws {Error} On HTTP errors, empty responses, or missing text content.
    */
   async _request(body, signal) {
-    const response = await fetch(API_BASE, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": this.apiKey,
-        "anthropic-version": API_VERSION,
-        "anthropic-dangerous-direct-browser-access": "true",
-      },
-      body: JSON.stringify(body),
-      signal,
-    });
+    let response;
+    try {
+      response = await fetch(API_BASE, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": this.apiKey,
+          "anthropic-version": API_VERSION,
+          "anthropic-dangerous-direct-browser-access": "true",
+        },
+        body: JSON.stringify(body),
+        signal,
+      });
+    } catch (err) {
+      if (err.name === "AbortError") throw err;
+      throw new Error(chrome.i18n.getMessage("NETWORK_ERROR"));
+    }
 
     if (!response.ok) {
       const errorBody = await response.text();
       console.error("[Claude] API error", response.status, errorBody);
-      if (response.status === 429) {
-        throw new Error(chrome.i18n.getMessage("RATE_LIMIT_ERROR"));
-      }
+      const errorMessage = parseApiError(errorBody);
       if (response.status === 401 || response.status === 403) {
         throw new Error(chrome.i18n.getMessage("INVALID_API_KEY_ERROR"));
       }
-      throw new Error(chrome.i18n.getMessage("API_ERROR", [String(response.status), errorBody]));
+      if (errorMessage.toLowerCase().includes("credit balance")) {
+        throw new Error(chrome.i18n.getMessage("INSUFFICIENT_CREDITS_ERROR"));
+      }
+      if (response.status === 429) {
+        throw new Error(chrome.i18n.getMessage("RATE_LIMIT_ERROR"));
+      }
+      if (response.status >= 500) {
+        throw new Error(chrome.i18n.getMessage("SERVER_ERROR"));
+      }
+      throw new Error(chrome.i18n.getMessage("API_ERROR", [String(response.status), errorMessage]));
     }
 
     const data = await response.json();

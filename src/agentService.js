@@ -326,6 +326,7 @@ export default class AgentService {
 
     try {
       await attachDebugger(tabId);
+      this._debuggerAttached = true;
       try {
         const startMeta = await getPageMetadata(tabId);
         this.approvedOrigin = getOrigin(startMeta.url);
@@ -337,8 +338,19 @@ export default class AgentService {
     } finally {
       setApprovedOrigin(null);
       await detachDebugger(tabId);
+      this._debuggerAttached = false;
       this.isRunning = false;
     }
+  }
+
+  /**
+   * Re-attaches the debugger if it has been detached, e.g. after a navigation
+   * to a chrome:// URL or an external tab close. Idempotent when already attached.
+   */
+  async _ensureDebugger() {
+    if (this._debuggerAttached) return;
+    await attachDebugger(this.tabId);
+    this._debuggerAttached = true;
   }
 
   /**
@@ -380,7 +392,16 @@ export default class AgentService {
           console.warn("[Agent] Capture blocked by injected extension frame; skipping step:", err.message);
           continue;
         }
-        throw new Error(`Failed to capture page state: ${err.message}`);
+        console.warn("[Agent] capturePageState failed, attempting re-attach:", err.message);
+        this._debuggerAttached = false;
+        try {
+          await this._ensureDebugger();
+          const sighted = this.persona && this.persona.sighted !== false;
+          const minimalElements = sighted && !this.sightedA11y;
+          pageState = await capturePageState(this.tabId, { minimalElements });
+        } catch (retryErr) {
+          throw new Error(`Failed to capture page state: ${retryErr.message}`);
+        }
       }
 
       const blocked = consumeBlockedNavigations();
@@ -619,6 +640,13 @@ export default class AgentService {
           break;
         }
 
+        if (this.loopDetector.shouldBlockAction(action)) {
+          console.log("[Agent] Blocked repeated action:", action.type);
+          allSuccess = false;
+          lastError = `Action "${action.type}" blocked — repeated too many times. Try a different approach.`;
+          break;
+        }
+
         if (action.type === "scroll"
           && action.index === undefined
           && (typeof action.x !== "number" || typeof action.y !== "number")) {
@@ -655,7 +683,10 @@ export default class AgentService {
         }
       }
 
-      this.loopDetector.addAction(actions[0], pageFingerprint);
+      for (let i = 0; i < Math.min(actions.length, MAX_ACTIONS_PER_STEP); i++) {
+        if (TERMINAL_ACTIONS.has(actions[i].type)) break;
+        this.loopDetector.addAction(actions[i], pageFingerprint);
+      }
 
       if (confirmHandled) {
         if (shouldBreak) break;
