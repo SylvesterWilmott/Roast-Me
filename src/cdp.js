@@ -1534,15 +1534,23 @@ async function verifyTypedValue(tabId, objectId, expectedValue) {
  * Clicks an element by index, scrolling it into view first, with a JS fallback if CDP input fails.
  * @param {number} tabId - The ID of the tab containing the element.
  * @param {number} index - The element index in the element map.
+ * @param {Object} [options]
+ * @param {Function} [options.onResolved] - Async hook called with (x, y) after the
+ *   element has been scrolled into view but before the click dispatches. Useful
+ *   for visualisations like cursor animation. Errors are swallowed.
  * @returns {Promise<void>}
  */
-export async function clickElement(tabId, index) {
+export async function clickElement(tabId, index, options) {
   await sendCommand(tabId, "Page.bringToFront");
   const el = elementMap[index];
   if (!el) throw new Error(`Element [${index}] not found in the current element map`);
+  const onResolved = options && options.onResolved;
 
   try {
     const { x, y } = await scrollAndGetCoordinates(tabId, el.backendDOMNodeId);
+    if (onResolved) {
+      try { await onResolved(x, y); } catch (err) {}
+    }
     await dispatchClick(tabId, x, y);
   } catch (err) {
     try {
@@ -1571,13 +1579,18 @@ export async function clickElement(tabId, index) {
  * Hovers over an element by index after scrolling it into view.
  * @param {number} tabId - The ID of the tab containing the element.
  * @param {number} index - The element index in the element map.
+ * @param {Object} [options]
+ * @param {Function} [options.onResolved] - Async hook called with (x, y) after scroll, before hover.
  * @returns {Promise<void>}
  */
-export async function hoverElement(tabId, index) {
+export async function hoverElement(tabId, index, options) {
   const el = elementMap[index];
   if (!el) throw new Error(`Element [${index}] not found in the current element map`);
 
   const { x, y } = await scrollAndGetCoordinates(tabId, el.backendDOMNodeId);
+  if (options && options.onResolved) {
+    try { await options.onResolved(x, y); } catch (err) {}
+  }
   await dispatchHover(tabId, x, y);
 }
 
@@ -1609,6 +1622,106 @@ export async function dispatchClick(tabId, x, y) {
     button: "left",
     clickCount: 1,
   });
+}
+
+// Inlined cursor artwork. The SVG viewBox is 0 0 48 48 with the click hotspot
+// (the cursor's tip) at the centre (24, 24). Combined with `marginLeft/Top =
+// -size/2`, `transform: translate(x, y)` puts the tip exactly on (x, y).
+// Filter id is namespaced so it can't collide with anything on the page.
+const CURSOR_SVG = '<svg width="100%" height="100%" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><g filter="url(#__roast-cursor-shadow)"><path d="M28.8924 41.7111L24.3338 25.7195C24.0984 24.8938 24.956 24.1808 25.7358 24.5539L40.8385 31.7789C41.6416 32.1631 41.5812 33.3157 40.7425 33.6128L34.5312 35.8136C34.3056 35.8935 34.1164 36.0508 33.9978 36.2571L30.7318 41.9358C30.2908 42.7026 29.1347 42.5613 28.8924 41.7111Z" fill="#EF4415"/><path d="M23.8508 25.8541C23.4977 24.6156 24.7836 23.5465 25.9533 24.106L41.0564 31.3311C42.2607 31.9075 42.1699 33.6356 40.9119 34.0813L34.7012 36.2822C34.5885 36.3221 34.4939 36.4009 34.4346 36.5038L31.1679 42.1826C30.5065 43.3326 28.7731 43.1211 28.4093 41.846L23.8508 25.8541Z" stroke="#EF4415"/></g><defs><filter id="__roast-cursor-shadow" x="21.2881" y="22.4541" width="23.124" height="23.979" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB"><feFlood flood-opacity="0" result="BackgroundImageFix"/><feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/><feOffset dy="1"/><feGaussianBlur stdDeviation="1"/><feComposite in2="hardAlpha" operator="out"/><feColorMatrix type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.08 0"/><feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow"/><feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow" result="shape"/></filter></defs></svg>';
+
+/**
+ * Renders an animated cursor moving from one CSS coordinate to another, then
+ * fades it out. Resolves after the move animation completes; the fade-out is
+ * scheduled in the page context and runs without further awaits.
+ *
+ * Move duration scales linearly with distance at a constant speed
+ * (pxPerSecond), so the cursor glides at the same velocity regardless of how
+ * far it has to go. The duration is computed in the page context where
+ * viewport size is known, allowing a sensible default origin (viewport
+ * center) when `from` is null.
+ *
+ * @param {number} tabId - The ID of the tab to render in.
+ * @param {{x: number, y: number}|null} from - Starting CSS position, or null.
+ * @param {{x: number, y: number}} to - Destination CSS position.
+ * @param {Object} [options]
+ * @param {number} [options.pxPerSecond=1400] - Constant cursor velocity.
+ * @param {number} [options.fadeMs=250] - Fade-out duration.
+ * @param {number} [options.dwellMs=120] - Pause at target before fading.
+ * @param {number} [options.size=48] - Cursor canvas size in CSS pixels.
+ * @returns {Promise<void>}
+ */
+export async function renderCursorMove(tabId, from, to, options) {
+  const opts = options || {};
+  const pxPerSecond = opts.pxPerSecond || 1400;
+  const fadeMs = opts.fadeMs || 250;
+  const dwellMs = opts.dwellMs || 120;
+  const size = opts.size || 48;
+
+  const fromExpr = from && typeof from.x === "number" && typeof from.y === "number"
+    ? `{ x: ${from.x}, y: ${from.y} }`
+    : "null";
+
+  const expression = `
+    (function () {
+      var ID = "__roast-cursor";
+      var size = ${size};
+      var pxPerSecond = ${pxPerSecond};
+      var dwellMs = ${dwellMs};
+      var fadeMs = ${fadeMs};
+      var to = { x: ${to.x}, y: ${to.y} };
+      var fromOverride = ${fromExpr};
+      var el = document.getElementById(ID);
+      if (!el) {
+        el = document.createElement("div");
+        el.id = ID;
+        el.setAttribute("aria-hidden", "true");
+        Object.assign(el.style, {
+          position: "fixed",
+          top: "0px",
+          left: "0px",
+          width: size + "px",
+          height: size + "px",
+          marginLeft: -(size / 2) + "px",
+          marginTop: -(size / 2) + "px",
+          pointerEvents: "none",
+          zIndex: "2147483647",
+          opacity: "0",
+          willChange: "transform, opacity",
+        });
+        el.innerHTML = ${JSON.stringify(CURSOR_SVG)};
+        (document.body || document.documentElement).appendChild(el);
+      }
+      var start = fromOverride || { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+      var dx = to.x - start.x;
+      var dy = to.y - start.y;
+      var distance = Math.sqrt(dx * dx + dy * dy);
+      var moveMs = Math.round((distance / pxPerSecond) * 1000);
+      el.style.transition = "transform 0ms linear, opacity 0ms linear";
+      el.style.transform = "translate(" + start.x + "px, " + start.y + "px)";
+      el.style.opacity = "1";
+      // Force reflow so the next transition takes effect.
+      void el.offsetWidth;
+      el.style.transition = "transform " + moveMs + "ms linear, opacity " + fadeMs + "ms ease-out";
+      el.style.transform = "translate(" + to.x + "px, " + to.y + "px)";
+      // Schedule fade-out in the page context — the awaiter only blocks on the move.
+      setTimeout(function () {
+        if (!el.isConnected) return;
+        el.style.opacity = "0";
+      }, moveMs + dwellMs);
+      return new Promise(function (resolve) { setTimeout(resolve, moveMs); });
+    })()
+  `;
+
+  try {
+    await sendCommand(tabId, "Runtime.evaluate", {
+      expression: expression,
+      awaitPromise: true,
+      returnByValue: true,
+    });
+  } catch (err) {
+    // Cursor rendering is purely visual — never block the test on a failure.
+  }
 }
 
 /**
@@ -1665,11 +1778,16 @@ export async function dispatchTripleClick(tabId, x, y) {
  * Double-clicks an element by index, scrolling it into view first.
  * @param {number} tabId - The tab ID.
  * @param {number} index - The element index.
+ * @param {Object} [options]
+ * @param {Function} [options.onResolved] - Async hook called with (x, y) after scroll, before click.
  */
-export async function doubleClickElement(tabId, index) {
+export async function doubleClickElement(tabId, index, options) {
   const el = elementMap[index];
   if (!el) throw new Error(`Element [${index}] not found in the current element map`);
   const { x, y } = await scrollAndGetCoordinates(tabId, el.backendDOMNodeId);
+  if (options && options.onResolved) {
+    try { await options.onResolved(x, y); } catch (err) {}
+  }
   await dispatchDoubleClick(tabId, x, y);
 }
 
@@ -1677,11 +1795,16 @@ export async function doubleClickElement(tabId, index) {
  * Triple-clicks an element by index, scrolling it into view first.
  * @param {number} tabId - The tab ID.
  * @param {number} index - The element index.
+ * @param {Object} [options]
+ * @param {Function} [options.onResolved] - Async hook called with (x, y) after scroll, before click.
  */
-export async function tripleClickElement(tabId, index) {
+export async function tripleClickElement(tabId, index, options) {
   const el = elementMap[index];
   if (!el) throw new Error(`Element [${index}] not found in the current element map`);
   const { x, y } = await scrollAndGetCoordinates(tabId, el.backendDOMNodeId);
+  if (options && options.onResolved) {
+    try { await options.onResolved(x, y); } catch (err) {}
+  }
   await dispatchTripleClick(tabId, x, y);
 }
 

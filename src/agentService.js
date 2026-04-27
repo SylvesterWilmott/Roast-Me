@@ -25,6 +25,7 @@ import {
   waitForPageSettle,
   resolveElementCoordinates,
   scaleCoordinatesFromScreenshot,
+  renderCursorMove,
   getPageMetadata,
   setApprovedOrigin,
   consumeBlockedNavigations,
@@ -233,6 +234,21 @@ class ActionLoopDetector {
   }
 
   /**
+   * Returns true if the given action's hash has appeared at least 8 times in
+   * the rolling window — i.e. it should be hard-blocked instead of executed.
+   * @param {Object} action - The proposed action.
+   * @returns {boolean}
+   */
+  shouldBlockAction(action) {
+    const hash = this.hashAction(action);
+    let count = 0;
+    for (const h of this.actionHashes) {
+      if (h === hash) count++;
+    }
+    return count >= 8;
+  }
+
+  /**
    * Returns an escalating nudge message if repetitive behavior or page stagnation is detected.
    * @returns {string|null} A nudge message, or null if no loop is detected.
    */
@@ -280,6 +296,21 @@ export default class AgentService {
     this.abortController = null;
     this.rejectedActions = [];
     this._confirmResolver = null;
+    this._lastCursorPos = null;
+  }
+
+  /**
+   * Animates the on-page cursor dot to the given CSS coordinates and updates
+   * the tracked last position. Awaits the move so the action happens after the
+   * cursor arrives, then pauses briefly so the viewer can register the target
+   * before the click/hover dispatches.
+   * @param {number} x - Destination CSS x.
+   * @param {number} y - Destination CSS y.
+   */
+  async _animateCursorTo(x, y) {
+    await renderCursorMove(this.tabId, this._lastCursorPos, { x, y });
+    this._lastCursorPos = { x, y };
+    await new Promise(function (resolve) { setTimeout(resolve, 200); });
   }
 
   /**
@@ -794,30 +825,34 @@ export default class AgentService {
     if (this.persona && this.persona.keyboardOnly && KEYBOARD_BLOCKED_ACTIONS.has(action.type)) {
       throw new Error(`${action.type} is not available — this persona navigates with the keyboard only. Use focus + keypress (Tab, Enter, Space, arrows).`);
     }
+    const cursorHook = (x, y) => this._animateCursorTo(x, y);
     switch (action.type) {
       case "click":
         if (action.index !== undefined) {
-          await clickElement(this.tabId, action.index);
+          await clickElement(this.tabId, action.index, { onResolved: cursorHook });
         } else {
           const scaled = scaleCoordinatesFromScreenshot(action.x, action.y);
+          await this._animateCursorTo(scaled.x, scaled.y);
           await dispatchClick(this.tabId, scaled.x, scaled.y);
         }
         break;
 
       case "double_click":
         if (action.index !== undefined) {
-          await doubleClickElement(this.tabId, action.index);
+          await doubleClickElement(this.tabId, action.index, { onResolved: cursorHook });
         } else {
           const scaled = scaleCoordinatesFromScreenshot(action.x, action.y);
+          await this._animateCursorTo(scaled.x, scaled.y);
           await dispatchDoubleClick(this.tabId, scaled.x, scaled.y);
         }
         break;
 
       case "triple_click":
         if (action.index !== undefined) {
-          await tripleClickElement(this.tabId, action.index);
+          await tripleClickElement(this.tabId, action.index, { onResolved: cursorHook });
         } else {
           const scaled = scaleCoordinatesFromScreenshot(action.x, action.y);
+          await this._animateCursorTo(scaled.x, scaled.y);
           await dispatchTripleClick(this.tabId, scaled.x, scaled.y);
         }
         break;
@@ -861,10 +896,11 @@ export default class AgentService {
 
       case "hover":
         if (action.index !== undefined) {
-          await hoverElement(this.tabId, action.index);
+          await hoverElement(this.tabId, action.index, { onResolved: cursorHook });
         } else {
           const { dispatchHover } = await import("./cdp.js");
           const scaledHover = scaleCoordinatesFromScreenshot(action.x, action.y);
+          await this._animateCursorTo(scaledHover.x, scaledHover.y);
           await dispatchHover(this.tabId, scaledHover.x, scaledHover.y);
         }
         break;
