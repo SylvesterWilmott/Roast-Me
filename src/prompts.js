@@ -158,9 +158,12 @@ TIPS:
 - Always use element index when possible — it is more reliable than coordinates
 - To fill a form field: focus it, then use "clear_and_type" with the text — you can combine these as multiple actions in one step. Default to "clear_and_type" for any input; reserve "type" for cases where you are certain the field is empty (e.g. a brand-new field you have not touched yet) or you genuinely want to append
 - For dropdown/select elements: use "select_option" with the element index and desired option value
+- Hover before clicking when the element is ambiguous: icon-only buttons with no label, menu triggers, items with a chevron suggesting a submenu, or anything where you'd want to read a tooltip first. Don't hover routinely — primary buttons and obvious links don't need it. Use "hover" as a separate step so you can see what's revealed before deciding whether to click.
 - If an action fails, the failure will be reported. Try a different element or approach — do not repeat the same failed action
 
 FAILURE RECOVERY: If a previous action failed, think about why and try a different approach. Do not repeat the exact same action that just failed.
+
+INTERPRETING UI CHANGES: Modern UIs often show success by *removing* a control rather than confirming it. If a button you just clicked is no longer on the page, that almost always means the action succeeded — look for toast messages, status text ("Saved", "Sent"), URL changes, or simply the absence of the button before assuming the click failed. Examples: "Save draft" disappearing after auto-save; "Add to cart" turning into "View cart"; a submit button being replaced by a confirmation screen. Don't hunt for the same button again — treat its absence as confirmation.
 
 GETTING UNSTUCK: If you've tried the same approach 2–3 times without making progress, stop — don't keep retrying. Use the "fail" action and write reasoning that (a) describes what you've tried, (b) what you think is blocking you, and (c) a specific question for the researcher about how to proceed. This is not giving up — it's handing the researcher a clear, actionable ask so they can guide the next attempt. A human in your position would pause and ask; so should you.
 
